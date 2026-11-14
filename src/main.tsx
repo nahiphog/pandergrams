@@ -135,7 +135,14 @@ function App() {
         {result?.status === 'solved' && (
           <ol className="solution-paths" aria-label="Word transformations in starting order" tabIndex={0}>
             {words.map((word, row) => (
-              <li key={row}>{[word, ...result.moves.filter((move) => move.row === row).map((move) => move.to)].join(' → ')}</li>
+              <li key={row}>
+                {word}
+                {result.moves.filter((move) => move.row === row).map((move, index) => (
+                  <span key={index}>
+                    {' → '}{move.to.slice(0, move.position)}<mark className="changed-letter" title={`Letter ${move.position + 1}: ${move.from[move.position]} → ${move.to[move.position]}`}>{move.to[move.position]}</mark>{move.to.slice(move.position + 1)}
+                  </span>
+                ))}
+              </li>
             ))}
           </ol>
         )}
