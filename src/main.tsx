@@ -10,6 +10,7 @@ const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 
 function App() {
   const [words, setWords] = useState(initialWords)
+  const [excludedInput, setExcludedInput] = useState('')
   const [lexicon, setLexicon] = useState<Set<string> | null>(null)
   const [dictionaryError, setDictionaryError] = useState('')
   const [retry, setRetry] = useState(0)
@@ -22,7 +23,9 @@ function App() {
   const usedLetters = new Set(words.join('').replace(/[^A-Z]/g, ''))
   const missingLetters = alphabet.filter((letter) => !usedLetters.has(letter))
   const errors = words.map((word) => !word ? 'Enter a word.' : !/^[A-Z]+$/.test(word) ? 'Use letters A–Z only.' : lexicon && !lexicon.has(word) ? 'Not in the dictionary.' : '')
-  const canSolve = !!lexicon && words.length > 0 && !errors.some(Boolean)
+  const excludedWords = excludedInput.split(',').map((word) => word.trim().toUpperCase()).filter(Boolean)
+  const exclusionError = excludedWords.some((word) => !/^[A-Z]+$/.test(word)) ? 'Use words containing A–Z only, separated by commas.' : ''
+  const canSolve = !!lexicon && words.length > 0 && !errors.some(Boolean) && !exclusionError
 
   useEffect(() => {
     const controller = new AbortController()
@@ -78,7 +81,7 @@ function App() {
         setNotice('The search worker failed. Try again with a smaller word bank.')
         stop()
       }
-      const request: SearchRequest = { id, words: [...words], dictionary: [...lexicon] }
+      const request: SearchRequest = { id, words: [...words], dictionary: [...lexicon], excludedWords }
       activeWorker.postMessage(request)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Unable to start the search.')
@@ -115,6 +118,12 @@ function App() {
           </div>
           <div className="edit-actions"><button onClick={() => edit([...words, ''])}>+ Add word</button><button onClick={() => edit([...initialWords])}>Reset example</button></div>
           {!words.length && <p className="helper">Add at least one starting word.</p>}
+          <div className="exclusions-field">
+            <label htmlFor="excluded-words">Excluded words <span>(optional)</span></label>
+            <input id="excluded-words" value={excludedInput} placeholder="e.g. SEXERS, VEXERS" spellCheck={false} autoComplete="off" aria-invalid={!!exclusionError} aria-describedby={`exclusions-help${exclusionError ? ' exclusions-error' : ''}`} onChange={(event) => { edit(words); setExcludedInput(event.target.value) }} />
+            <p id="exclusions-help" className="limit-note">Separate words with commas. These words cannot be mutation destinations; starting words are still allowed. Clear the box to allow them again. This list is not saved.</p>
+            {exclusionError && <p id="exclusions-error" className="field-error">{exclusionError}</p>}
+          </div>
           <div className="search-actions"><button className="primary-button" disabled={!canSolve || running} onClick={search}>{running ? 'Searching…' : 'Find minimum changes'}</button>{running && <button onClick={() => { stop(); setNotice('Search cancelled. No conclusion was reached.') }}>Cancel</button>}</div>
           <p className="limit-note">Searches up to 250,000 word banks or 30 seconds. Editing a word clears the search.</p>
         </div>
@@ -129,7 +138,7 @@ function App() {
       <section className="results-panel" aria-labelledby="results-heading" aria-busy={running}>
         <p className="eyebrow">Shortest path</p>
         <h2 id="results-heading">{running ? 'Exploring word banks…' : result?.status === 'solved' ? `Solved in ${result.moves.length} ${result.moves.length === 1 ? 'move' : 'moves'}` : result?.status === 'impossible' ? 'No solution' : result?.status === 'limited' ? 'Search limit reached' : 'Your solution'}</h2>
-        <div role="status">{notice && <p>{notice}</p>}{result && result.status !== 'solved' && <p>{result.reason}</p>}{result?.status === 'solved' && <p>Minimum guaranteed by A* search. Final coverage: 26/26 letters.</p>}</div>
+        <div role="status">{notice && <p>{notice}</p>}{result && result.status !== 'solved' && <p>{result.reason}</p>}{result?.status === 'solved' && <p>Minimum guaranteed by A* search{excludedWords.length ? ' with these exclusions' : ''}. Final coverage: 26/26 letters.</p>}</div>
         {progress && <p className="search-stats">Current path depth {progress.depth} · {progress.explored.toLocaleString()} explored · {progress.discovered.toLocaleString()} discovered · {(progress.elapsedMs / 1000).toFixed(1)}s</p>}
         {!progress && <p>Edit the starting bank above and start a search to see each change.</p>}
         {result?.status === 'solved' && (

@@ -61,6 +61,7 @@ export type Result = Progress & (
   | { status: 'impossible' | 'limited'; reason: string }
 )
 export interface SearchOptions {
+  excludedWords?: readonly string[]
   maxStates?: number
   maxMs?: number
   onProgress?: (progress: Progress) => void
@@ -74,6 +75,8 @@ export function solve(start: string[], dictionary: Set<string>, options: SearchO
     throw new Error('Enter at least one word, using only valid dictionary words.')
   }
   const maxStates = options.maxStates ?? 250_000
+  // Exclusions apply only to mutation destinations, never invalidate the input bank.
+  const excluded = new Set((options.excludedWords ?? []).map((word) => word.trim().toUpperCase()).filter(Boolean))
   const maxMs = options.maxMs ?? 30_000
   const now = options.now ?? (() => performance.now())
   const began = now()
@@ -120,7 +123,7 @@ export function solve(start: string[], dictionary: Set<string>, options: SearchO
         const letter = String.fromCharCode(code)
         if (letter === word[position]) continue
         const candidate = word.slice(0, position) + letter + word.slice(position + 1)
-        if (dictionary.has(candidate)) result.push({ word: candidate, position })
+        if (dictionary.has(candidate) && !excluded.has(candidate)) result.push({ word: candidate, position })
       }
     }
     neighborCache.set(word, result)
@@ -157,5 +160,5 @@ export function solve(start: string[], dictionary: Set<string>, options: SearchO
       }
     }
   }
-  return { ...stats(), status: 'impossible', reason: 'All reachable word banks were checked. No solution exists for these starting words.' }
+  return { ...stats(), status: 'impossible', reason: 'All reachable word banks were checked. No solution exists for these starting words and exclusions.' }
 }

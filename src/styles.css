@@ -44,6 +44,12 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .editable-word { display: grid; grid-template-columns: 26px minmax(0, 1fr) 38px; gap: 8px; align-items: center; }
 .editable-word input { min-width: 0; width: 100%; padding: 11px; border: 1px solid #c5cfc8; border-radius: 9px; background: #fafbf7; color: #263b4c; font-family: 'DM Mono', monospace; }
 .editable-word input[aria-invalid="true"] { border-color: #b04430; }
+.exclusions-field { margin-top: 24px; }
+.exclusions-field label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; }
+.exclusions-field label span { color: #657384; font-weight: 400; }
+.exclusions-field input { width: 100%; min-width: 0; padding: 11px; border: 1px solid #c5cfc8; border-radius: 9px; color: #263b4c; background: #fafbf7; }
+.exclusions-field input[aria-invalid="true"] { border-color: #b04430; }
+.exclusions-field .field-error { margin-top: 8px; }
 .remove-word { padding: 6px; font-size: 22px; }
 .field-error { color: #a23324; font-size: 12px; margin: 0; grid-column: 2 / -1; }
 .edit-actions, .search-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }

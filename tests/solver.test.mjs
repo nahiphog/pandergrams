@@ -114,3 +114,24 @@ test('A* agrees with independent exhaustive BFS on 100 seeded word graphs', () =
   }
   assert.ok(solved > 0 && impossible > 0)
 })
+
+test('excluded intermediate words force the shortest permitted alternative', () => {
+  const dictionary = dict('AAA', 'ABA', 'ABC', 'DAA', 'DAB', 'DCB', 'ACB')
+  assert.equal(solve(['AAA', filler], dictionary).moves.length, 2)
+  const result = solve(['AAA', filler], dictionary, { excludedWords: [' aba ', 'aBa', '', 'UNKNOWN'] })
+  assert.equal(result.status, 'solved')
+  assert.equal(result.moves.length, 4)
+  assert.ok(result.moves.every(move => move.to !== 'ABA'))
+  assert.equal(solve(['AAA', filler], dictionary).moves.length, 2, 'exclusions do not persist between searches')
+  assert.ok(dictionary.has('ABA'), 'dictionary is not modified')
+})
+test('excluding the only goal produces an exhaustive no-solution result', () => {
+  assert.equal(solve(['AAA', filler], dict('AAA', 'ABA', 'ABC'), { excludedWords: ['ABC'] }).status, 'impossible')
+})
+test('excluded starting words remain allowed and can mutate away', () => {
+  const dictionary = dict('AAA', 'ABA', 'ABC')
+  const result = solve(['AAA', filler], dictionary, { excludedWords: ['AAA', filler] })
+  assert.equal(result.status, 'solved')
+  assert.equal(result.moves.length, 2)
+  assert.equal(solve(['ABC', filler], dictionary, { excludedWords: ['ABC'] }).moves.length, 0)
+})

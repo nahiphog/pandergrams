@@ -20,6 +20,13 @@ Input is normalized to uppercase. Substitutions preserve word lengths; duplicate
 words are allowed. Editing or resetting inputs cancels the current search and
 clears its result. Cancel also immediately terminates the search worker.
 
+The optional **Excluded words** field accepts comma-separated words, ignoring
+case, surrounding spaces, duplicates, and empty entries. Excluded words cannot
+be mutation destinations, including final mutations; starting words remain
+allowed. Editing the list cancels and clears the current search. Clear the field
+to remove exclusions; the list is not persisted. A* still finds the fewest moves
+among solutions permitted by the exclusions.
+
 For a quick one-move example, enter these nine words:
 `THE QUICK BROWN FOX JUMPS OVER THE HAZY DOG`.
 
