@@ -132,10 +132,13 @@ function App() {
         <div role="status">{notice && <p>{notice}</p>}{result && result.status !== 'solved' && <p>{result.reason}</p>}{result?.status === 'solved' && <p>Minimum guaranteed by A* search. Final coverage: 26/26 letters.</p>}</div>
         {progress && <p className="search-stats">Current path depth {progress.depth} · {progress.explored.toLocaleString()} explored · {progress.discovered.toLocaleString()} discovered · {(progress.elapsedMs / 1000).toFixed(1)}s</p>}
         {!progress && <p>Edit the starting bank above and start a search to see each change.</p>}
-        {result?.status === 'solved' && <>
-          <ol className="solution-moves">{result.moves.map((move, index) => <li key={index}><span className="move-context">Word {move.row + 1}, letter {move.position + 1}</span><span className="move-words">{move.from.slice(0, move.position)}<mark>{move.from[move.position]}</mark>{move.from.slice(move.position + 1)} <span aria-label="becomes">→</span> {move.to.slice(0, move.position)}<mark>{move.to[move.position]}</mark>{move.to.slice(move.position + 1)}</span></li>)}</ol>
-          <h3>Final word bank</h3><ul className="final-words">{result.words.map((word, index) => <li key={index}>{word}</li>)}</ul>
-        </>}
+        {result?.status === 'solved' && (
+          <ol className="solution-paths" aria-label="Word transformations in starting order" tabIndex={0}>
+            {words.map((word, row) => (
+              <li key={row}>{[word, ...result.moves.filter((move) => move.row === row).map((move) => move.to)].join(' → ')}</li>
+            ))}
+          </ol>
+        )}
       </section>
     </main>
   )
