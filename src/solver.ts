@@ -80,6 +80,9 @@ export function solve(start: string[], dictionary: Set<string>, options: SearchO
   // Exclusions apply only to mutation destinations, never invalidate the input bank.
   const excluded = new Set((options.excludedWords ?? []).map((word) => word.trim().toUpperCase()).filter(Boolean))
   const maxMs = options.maxMs ?? 30_000
+  if (!Number.isSafeInteger(maxStates) || maxStates < 1 || !Number.isSafeInteger(maxMs) || maxMs < 1) {
+    throw new Error('Search limits must be positive whole numbers within the supported numeric range.')
+  }
   const now = options.now ?? (() => performance.now())
   const began = now()
   let lastReport = began

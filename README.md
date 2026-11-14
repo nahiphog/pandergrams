@@ -53,7 +53,13 @@ restriction is necessary: same-position detours cannot improve a shortest path.
 messages from replacing newer results. The UI validates words against the same
 dictionary passed to the worker.
 
-Search is bounded at 250,000 discovered states or 30 seconds. A limit is an
+Search defaults to 250,000 discovered states or 30 seconds. Both limits can be
+changed in the Search limits controls before running a search. Enter positive
+whole numbers; time is specified in seconds and includes collecting optimal
+walkthroughs. Editing limits cancels and clears an active search. Restore default
+limits resets both settings; Clear input preserves the selected search limits.
+Larger state limits require more browser memory. The separate 10,000-walkthrough
+collection limit still applies. A reached limit is an
 incomplete search, never a proof of impossibility. The default five-word example
 has a minimum solution of nine moves; A* finds it within the state limit.
 These limits can be adjusted through the solver options; memory still grows

@@ -194,3 +194,27 @@ test('all walkthroughs match exhaustive path enumeration on small word graphs', 
     assert.deepEqual(new Set(result.solutions.map(s=>s.moves.map(m=>m.to).join(','))),expected)
   }
 })
+
+test('raising the state limit allows all optimal walkthroughs to be collected', () => {
+  const dictionary = dict('AAA', 'ABA', 'AAC', 'ABC')
+  assert.equal(solve(['AAA', filler], dictionary, { maxStates: 1 }).status, 'limited')
+  const result = solve(['AAA', filler], dictionary, { maxStates: 100 })
+  assert.equal(result.complete, true)
+  assert.equal(result.solutions.length, 2)
+})
+test('raising the time limit allows the same search to complete', () => {
+  const run = maxMs => {
+    let tick = 0
+    return solve(['AAA', filler], dict('AAA', 'ABA', 'AAC', 'ABC'), { maxMs, now: () => tick++ })
+  }
+  assert.equal(run(1).status, 'limited')
+  assert.equal(run(10000).complete, true)
+  assert.equal(run(10000).solutions.length, 2)
+})
+test('invalid search limits cannot bypass resource checks', () => {
+  for (const name of ['maxStates', 'maxMs']) {
+    for (const value of [0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+      assert.throws(() => solve(['AAA', filler], dict('AAA'), { [name]: value }), /Search limits/)
+    }
+  }
+})

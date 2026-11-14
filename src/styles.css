@@ -50,6 +50,15 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .exclusions-field input { width: 100%; min-width: 0; padding: 11px; border: 1px solid #c5cfc8; border-radius: 9px; color: #263b4c; background: #fafbf7; }
 .exclusions-field input[aria-invalid="true"] { border-color: #b04430; }
 .exclusions-field .field-error { margin-top: 8px; }
+.search-limits { min-width: 0; margin: 24px 0 0; padding: 16px; border: 1px solid #c5cfc8; border-radius: 12px; }
+.search-limits legend { font-size: 14px; font-weight: 600; padding: 0 6px; }
+.limit-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.limit-fields label { display: block; font-size: 13px; margin-bottom: 8px; }
+.limit-fields input { width: 100%; min-width: 0; padding: 10px; border: 1px solid #c5cfc8; border-radius: 8px; background: #fafbf7; color: #263b4c; }
+.limit-fields input[aria-invalid="true"] { border-color: #b04430; }
+.limit-fields .field-error { margin-top: 8px; }
+.search-limits button { margin-top: 12px; font-size: 12px; }
+@media (max-width: 390px) { .limit-fields { grid-template-columns: 1fr; } }
 .remove-word { padding: 6px; font-size: 22px; }
 .field-error { color: #a23324; font-size: 12px; margin: 0; grid-column: 2 / -1; }
 .edit-actions, .search-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
