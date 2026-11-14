@@ -1,0 +1,73 @@
+# Pandergram Solver
+
+A React/TypeScript app that searches for the fewest single-letter substitutions
+needed for a word bank to cover A–Z simultaneously.
+
+## Run
+
+Use Node.js 24 or newer (the tests use native TypeScript support).
+
+```sh
+npm install
+npm run dev
+npm test
+npm run build
+```
+
+Edit, add, or remove starting words, then select **Find minimum changes**.
+Every word must appear in the bundled [Norvig dictionary](https://norvig.com/ngrams/word.list).
+Input is normalized to uppercase. Substitutions preserve word lengths; duplicate
+words are allowed. Editing or resetting inputs cancels the current search and
+clears its result. Cancel also immediately terminates the search worker.
+
+For a quick one-move example, enter these nine words:
+`THE QUICK BROWN FOX JUMPS OVER THE HAZY DOG`.
+
+## Search behavior
+
+`src/solver.ts` performs exact A* over ordered complete word banks. A binary
+min-heap prioritizes `f = g + h`, where `g` is the moves taken and `h` is the
+number of missing alphabet letters. Each substitution can introduce at most one
+missing letter, so this heuristic is admissible and consistent. Equal priorities
+favor fewer missing letters, with insertion order as the final tie-breaker.
+
+The solver tracks the best move count for each entire bank, accepting a cheaper
+route even if that bank was already discovered. Superseded heap entries are
+skipped. A goal is accepted only when popped from the minimum-priority frontier,
+preserving the fewest-moves guarantee. A word can occur in many different bank
+states. Cached neighbors and letter masks speed up expansion; immutable parent
+links reconstruct the solution without changing earlier paths.
+
+Coverage is calculated from the current bank, not accumulated across moves.
+Moves that temporarily lose coverage remain eligible. No history-based letter
+restriction is necessary: same-position detours cannot improve a shortest path.
+
+`src/solver.worker.ts` runs A* off the UI thread. Request IDs prevent stale
+messages from replacing newer results. The UI validates words against the same
+dictionary passed to the worker.
+
+Search is bounded at 250,000 discovered states or 30 seconds. A limit is an
+incomplete search, never a proof of impossibility. The default five-word example
+has a minimum solution of nine moves; A* finds it within the state limit.
+These limits can be adjusted through the solver options; memory still grows
+rapidly with the number of word-bank
+combinations. An already complete bank returns zero moves. Fewer than 26 total
+letter positions is rejected as impossible; otherwise, no solution is reported
+only after exhaustive search.
+
+## Validation
+
+The Node test suite checks shortest paths, reconstruction, full-bank state
+tracking, temporary coverage loss, cycles, invalid inputs, resource limits,
+progress, and a real-dictionary solution. It also compares A* with an independent
+exhaustive BFS oracle on 100 deterministic generated word graphs. `npm run build`
+checks TypeScript and bundles the application and worker.
+
+## Deployment
+
+The site is published at https://nahiphog.github.io/pandergrams/.
+`.github/workflows/deploy.yml` installs the locked dependencies with `npm ci`,
+runs the tests, builds with Node 24, and deploys `dist` using GitHub Pages Actions.
+Pushes to `main` deploy automatically; the workflow can also be run manually.
+Production assets and the dictionary use the `/pandergrams/` base path; local
+development uses `/`. No additional deployment package or secret is needed.
