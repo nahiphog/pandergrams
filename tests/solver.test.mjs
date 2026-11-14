@@ -135,3 +135,62 @@ test('excluded starting words remain allowed and can mutate away', () => {
   assert.equal(result.moves.length, 2)
   assert.equal(solve(['ABC', filler], dictionary, { excludedWords: ['ABC'] }).moves.length, 0)
 })
+
+test('collects different shortest paths to the same final word bank', () => {
+  const result = solve(['AAA', filler], dict('AAA', 'ABA', 'AAC', 'ABC'))
+  assert.equal(result.complete, true)
+  assert.deepEqual(new Set(result.solutions.map(s => s.moves.map(m => m.to).join(','))), new Set(['ABA,ABC', 'AAC,ABC']))
+})
+test('collects all optimal goal banks and keeps unchanged rows', () => {
+  const result = solve(['AAA', filler], dict('AAA', 'ABA', 'AAC', 'ABC', 'ACA', 'ACB'))
+  assert.equal(result.complete, true)
+  assert.equal(result.solutions.length, 3)
+  for (const solution of result.solutions) {
+    assert.equal(solution.moves.length, 2)
+    assert.equal(solution.words[1], filler)
+  }
+})
+test('deduplicates only interleavings, preserving distinct row assignments', () => {
+  const result = solve(['AAA', 'AAA', filler], dict('AAA', 'BAA', 'CAA'))
+  assert.equal(result.complete, true)
+  assert.equal(result.solutions.length, 2)
+  assert.deepEqual(new Set(result.solutions.map(s => s.words.join(','))), new Set([['BAA','CAA',filler].join(','), ['CAA','BAA',filler].join(',')]))
+})
+test('result limits preserve an optimal solution and explicitly report incompleteness', () => {
+  const result = solve(['AAA', filler], dict('AAA', 'ABA', 'AAC', 'ABC'), { maxSolutions: 1 })
+  assert.equal(result.status, 'solved')
+  assert.equal(result.moves.length, 2)
+  assert.equal(result.solutions.length, 1)
+  assert.equal(result.complete, false)
+  assert.match(result.reason, /Result limit/)
+})
+test('complete starting bank has exactly one zero-move walkthrough', () => {
+  const result = solve(['ABC', filler], dict('ABC'))
+  assert.equal(result.complete, true)
+  assert.equal(result.solutions.length, 1)
+  assert.deepEqual(result.solutions[0].moves, [])
+})
+
+test('all walkthroughs match exhaustive path enumeration on small word graphs', () => {
+  const candidates = []
+  for (const a of 'ABC') for (const b of 'ABC') for (const c of 'ABC') candidates.push(a+b+c)
+  let seed = 13
+  for (let sample = 0; sample < 40; sample++) {
+    const dictionary = dict('AAA', ...candidates.filter(() => { seed = (Math.imul(seed,1664525)+1013904223)>>>0; return seed / 2**32 < .3 }))
+    const start = ['AAA', filler]
+    const distance = bfsDistance(start, dictionary)
+    const result = solve(start, dictionary)
+    if (distance === null) { assert.equal(result.status, 'impossible'); continue }
+    const expected = new Set()
+    const visit = (word, path) => {
+      if (path.length === distance) {
+        if (new Set(word+filler).size === 26) expected.add(path.join(','))
+        return
+      }
+      for (const next of dictionary) if (next.length === word.length && [...word].filter((letter,i) => letter !== next[i]).length === 1) visit(next, [...path,next])
+    }
+    visit('AAA',[])
+    assert.equal(result.complete,true)
+    assert.deepEqual(new Set(result.solutions.map(s=>s.moves.map(m=>m.to).join(','))),expected)
+  }
+})

@@ -17,6 +17,7 @@ function App() {
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState<Progress | null>(null)
   const [result, setResult] = useState<Result | null>(null)
+  const [visibleSolutions, setVisibleSolutions] = useState(10)
   const [notice, setNotice] = useState('')
   const worker = useRef<Worker | null>(null)
   const searchId = useRef(0)
@@ -48,6 +49,7 @@ function App() {
   function edit(next: string[]) {
     stop()
     setWords(next)
+    setVisibleSolutions(10)
     setResult(null)
     setProgress(null)
     setNotice('')
@@ -56,6 +58,7 @@ function App() {
   function search() {
     if (!canSolve || !lexicon) return
     stop()
+    setVisibleSolutions(10)
     setResult(null)
     setNotice('')
     setProgress({ depth: 0, explored: 0, discovered: 1, elapsedMs: 0 })
@@ -116,11 +119,11 @@ function App() {
               </div>
             ))}
           </div>
-          <div className="edit-actions"><button onClick={() => edit([...words, ''])}>+ Add word</button><button onClick={() => edit([...initialWords])}>Reset example</button></div>
+          <div className="edit-actions"><button onClick={() => edit([...words, ''])}>+ Add word</button><button onClick={() => { edit(words.map(() => '')); setExcludedInput('') }}>Clear input</button></div>
           {!words.length && <p className="helper">Add at least one starting word.</p>}
           <div className="exclusions-field">
             <label htmlFor="excluded-words">Excluded words <span>(optional)</span></label>
-            <input id="excluded-words" value={excludedInput} placeholder="e.g. SEXERS, VEXERS" spellCheck={false} autoComplete="off" aria-invalid={!!exclusionError} aria-describedby={`exclusions-help${exclusionError ? ' exclusions-error' : ''}`} onChange={(event) => { edit(words); setExcludedInput(event.target.value) }} />
+            <input id="excluded-words" value={excludedInput} placeholder="e.g. SEXERS, VEXERS" spellCheck={false} autoComplete="off" aria-invalid={!!exclusionError} aria-describedby={`exclusions-help${exclusionError ? ' exclusions-error' : ''}`} onChange={(event) => { edit(words); setExcludedInput(event.target.value.toUpperCase()) }} />
             <p id="exclusions-help" className="limit-note">Separate words with commas. These words cannot be mutation destinations; starting words are still allowed. Clear the box to allow them again. This list is not saved.</p>
             {exclusionError && <p id="exclusions-error" className="field-error">{exclusionError}</p>}
           </div>
@@ -142,11 +145,16 @@ function App() {
         {progress && <p className="search-stats">Current path depth {progress.depth} · {progress.explored.toLocaleString()} explored · {progress.discovered.toLocaleString()} discovered · {(progress.elapsedMs / 1000).toFixed(1)}s</p>}
         {!progress && <p>Edit the starting bank above and start a search to see each change.</p>}
         {result?.status === 'solved' && (
+          <div>
+          <p>{result.complete ? `All ${result.solutions.length} optimal walkthroughs found.` : `${result.solutions.length} optimal walkthroughs found so far. ${result.reason} More may exist.`} Different orderings of the same per-word mutations are shown once.</p>
+          {result.solutions.slice(0, visibleSolutions).map((solution, solutionIndex) => (
+          <section className="solution-option" key={solutionIndex} aria-label={`Solution ${solutionIndex + 1}`}>
+          <h3>Solution {solutionIndex + 1}</h3>
           <ol className="solution-paths" aria-label="Word transformations in starting order" tabIndex={0}>
             {words.map((word, row) => (
               <li key={row}>
                 {word}
-                {result.moves.filter((move) => move.row === row).map((move, index) => (
+                {solution.moves.filter((move) => move.row === row).map((move, index) => (
                   <span key={index}>
                     {' → '}{move.to.slice(0, move.position)}<mark className="changed-letter" title={`Letter ${move.position + 1}: ${move.from[move.position]} → ${move.to[move.position]}`}>{move.to[move.position]}</mark>{move.to.slice(move.position + 1)}
                   </span>
@@ -154,6 +162,10 @@ function App() {
               </li>
             ))}
           </ol>
+          </section>
+          ))}
+          {visibleSolutions < result.solutions.length && <button onClick={() => setVisibleSolutions(visibleSolutions + 10)}>Show more solutions ({result.solutions.length - visibleSolutions} remaining)</button>}
+          </div>
         )}
       </section>
     </main>

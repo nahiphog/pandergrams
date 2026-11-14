@@ -78,3 +78,16 @@ runs the tests, builds with Node 24, and deploys `dist` using GitHub Pages Actio
 Pushes to `main` deploy automatically; the workflow can also be run manually.
 Production assets and the dictionary use the `/pandergrams/` base path; local
 development uses `/`. No additional deployment package or secret is needed.
+
+## Multiple optimal walkthroughs
+
+A* retains equal-cost predecessor edges and continues through every state whose
+estimated total cost is at most the optimum. The results include distinct
+per-word mutation chains in starting row order. Interleavings of independent row
+mutations are shown once. Results are displayed ten at a time with Show more.
+The UI explicitly labels incomplete results if the state/time limit or the
+10,000-walkthrough collection limit is reached; it never calls a partial set all
+solutions. Every returned solution still has the proven minimum move count.
+
+Excluded words convert to uppercase as you type. Clear input empties all current
+word boxes and exclusions, cancels any running search, and clears all results.

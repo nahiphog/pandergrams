@@ -56,11 +56,13 @@ class Frontier {
 
 export interface Move { row: number; position: number; from: string; to: string }
 export interface Progress { depth: number; explored: number; discovered: number; elapsedMs: number }
+export interface Solution { moves: Move[]; words: string[] }
 export type Result = Progress & (
-  | { status: 'solved'; moves: Move[]; words: string[] }
+  | { status: 'solved'; moves: Move[]; words: string[]; solutions: Solution[]; complete: boolean; reason?: string }
   | { status: 'impossible' | 'limited'; reason: string }
 )
 export interface SearchOptions {
+  maxSolutions?: number
   excludedWords?: readonly string[]
   maxStates?: number
   maxMs?: number
@@ -89,12 +91,16 @@ export function solve(start: string[], dictionary: Set<string>, options: SearchO
     return masks.get(word)!
   }
   const coverage = (words: string[]) => words.reduce((mask, word) => mask | maskOf(word), 0)
-  interface Node { words: string[]; key: string; parent: number; move?: Move; depth: number; missing: number }
+  interface Parent { parent: number; move: Move }
+  interface Node { parents: Parent[]; words: string[]; key: string; parent: number; move?: Move; depth: number; missing: number }
   const startKey = start.join('|')
-  const nodes: Node[] = [{ words: [...start], key: startKey, parent: -1, depth: 0, missing: missingLetterCount(coverage(start)) }]
+  const nodes: Node[] = [{ parents: [], words: [...start], key: startKey, parent: -1, depth: 0, missing: missingLetterCount(coverage(start)) }]
   // Keep row order: the same word in a different bank is a different state.
   // A previously discovered state can be reached more cheaply: keep its best g.
   const bestCost = new Map([[startKey, 0]])
+  const bestIndex = new Map([[startKey, 0]])
+  const goals: number[] = []
+  let optimalCost = Infinity
   const frontier = new Frontier((a, b) => {
     const left = nodes[a], right = nodes[b]
     const difference = left.depth + left.missing - right.depth - right.missing
@@ -103,14 +109,39 @@ export function solve(start: string[], dictionary: Set<string>, options: SearchO
   })
   frontier.push(0)
   const stats = (): Progress => ({ depth, explored, discovered: bestCost.size, elapsedMs: now() - began })
-  const solved = (index: number): Result => {
-    const moves: Move[] = []
-    for (let cursor = index; nodes[cursor].parent !== -1; cursor = nodes[cursor].parent) {
-      moves.push(nodes[cursor].move!)
+  const finish = (complete = true, reason?: string): Result => {
+    // Preserve a proven optimum even if limits prevent collecting all alternatives.
+    const firstMoves: Move[] = []
+    for (let cursor = goals[0]; nodes[cursor].parent !== -1; cursor = nodes[cursor].parent) firstMoves.push(nodes[cursor].move!)
+    firstMoves.reverse()
+    const solutions: Solution[] = []
+    const seen = new Set<string>()
+    const keyOf = (moves: Move[]) => JSON.stringify(start.map((_, row) => moves.filter(move => move.row === row).map(move => move.to)))
+    const add = (moves: Move[], words: string[]) => {
+      const key = keyOf(moves)
+      if (!seen.has(key)) { seen.add(key); solutions.push({ moves, words }) }
     }
-    return { ...stats(), depth: nodes[index].depth, status: 'solved', moves: moves.reverse(), words: nodes[index].words }
+    add(firstMoves, nodes[goals[0]].words)
+    // Row-ordered moves give one realization of each distinct per-word walkthrough.
+    // Reordering independent mutations never affects validity or final coverage.
+    const stack = goals.map(index => ({ index, lastRow: Infinity, reverseMoves: [] as Move[], words: nodes[index].words }))
+    while (stack.length) {
+      if (now() - began >= maxMs) { complete = false; reason ??= 'Time limit reached while collecting optimal solutions.'; break }
+      const entry = stack.pop()!
+      if (entry.index === 0) {
+        const moves = entry.reverseMoves.slice().reverse()
+        if (!seen.has(keyOf(moves)) && solutions.length >= (options.maxSolutions ?? 10_000)) { complete = false; reason = 'Result limit reached while collecting optimal solutions.'; break }
+        add(moves, entry.words)
+      } else {
+        for (const edge of nodes[entry.index].parents) {
+          if (edge.move.row <= entry.lastRow) stack.push({ index: edge.parent, lastRow: edge.move.row, reverseMoves: [...entry.reverseMoves, edge.move], words: entry.words })
+        }
+      }
+    }
+    return { ...stats(), depth: optimalCost, status: 'solved', ...solutions[0], solutions, complete, reason }
   }
-  if (coverage(start) === FULL_ALPHABET) return solved(0)
+  const limited = (reason: string): Result => goals.length ? finish(false, reason) : { ...stats(), status: 'limited', reason }
+  if (coverage(start) === FULL_ALPHABET) { goals.push(0); optimalCost = 0; return finish() }
   if (start.join('').length < 26) return { ...stats(), status: 'impossible', reason: 'Fewer than 26 letter positions cannot cover the alphabet.' }
 
   const neighborCache = new Map<string, { word: string; position: number }[]>()
@@ -137,11 +168,12 @@ export function solve(start: string[], dictionary: Set<string>, options: SearchO
     if (node.depth !== bestCost.get(node.key)) continue
     depth = node.depth
     explored++
-    // A goal is optimal only when removed from the minimum-f frontier.
-    if (node.missing === 0) return solved(head)
+    if (node.depth + node.missing > optimalCost) break
+    // Keep searching through all f <= optimum states and equal-cost predecessors.
+    if (node.missing === 0) { optimalCost = node.depth; goals.push(head); continue }
     for (let row = 0; row < node.words.length; row++) {
       const currentTime = now()
-      if (currentTime - began >= maxMs) return { ...stats(), status: 'limited', reason: 'Time limit reached. The search is incomplete; a solution may still exist.' }
+      if (currentTime - began >= maxMs) return limited('Time limit reached. The search is incomplete.')
       if (currentTime - lastReport >= 150) {
         options.onProgress?.(stats())
         lastReport = currentTime
@@ -152,13 +184,22 @@ export function solve(start: string[], dictionary: Set<string>, options: SearchO
         const key = words.join('|')
         const nextDepth = node.depth + 1
         const previousCost = bestCost.get(key)
-        if (previousCost !== undefined && previousCost <= nextDepth) continue
-        if (previousCost === undefined && bestCost.size >= maxStates) return { ...stats(), status: 'limited', reason: 'State limit reached. The search is incomplete; a solution may still exist.' }
+        const move = { row, position: neighbor.position, from: node.words[row], to: neighbor.word }
+        if (previousCost === nextDepth) {
+          nodes[bestIndex.get(key)!].parents.push({ parent: head, move })
+          continue
+        }
+        if (previousCost !== undefined && previousCost < nextDepth) continue
+        const missing = missingLetterCount(coverage(words))
+        if (nextDepth + missing > optimalCost) continue
+        if (previousCost === undefined && bestCost.size >= maxStates) return limited('State limit reached. The search is incomplete.')
         bestCost.set(key, nextDepth)
-        nodes.push({ words, key, parent: head, depth: nextDepth, missing: missingLetterCount(coverage(words)), move: { row, position: neighbor.position, from: node.words[row], to: neighbor.word } })
+        bestIndex.set(key, nodes.length)
+        nodes.push({ parents: [{ parent: head, move }], words, key, parent: head, depth: nextDepth, missing, move })
         frontier.push(nodes.length - 1)
       }
     }
   }
+  if (goals.length) return finish()
   return { ...stats(), status: 'impossible', reason: 'All reachable word banks were checked. No solution exists for these starting words and exclusions.' }
 }
