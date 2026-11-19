@@ -1,9 +1,36 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { explorationPaths, exploreLadder, solveLadder } from '../src/ladder.ts'
+import { explorationPaths, exploreLadder, solveLadder, targetRoutes } from '../src/ladder.ts'
 
 const differences = (a, b) => a.length === b.length ? [...a].filter((letter, i) => letter !== b[i]).length : Infinity
+
+test('two-word mode retains all equal shortest paths and pages without repeats or omissions', () => {
+  const words = Array.from({ length: 32 }, (_, n) => n.toString(2).padStart(5, '0').replaceAll('0', 'A').replaceAll('1', 'B'))
+  const result = solveLadder('AAAAA', 'BBBBB', new Set(words))
+  assert.equal(result.complete, true)
+  assert.equal(result.graph.nodes.BBBBB.pathCount, '120')
+  const routes = []
+  for (let offset = 0n; offset < 120n; offset += 10n) routes.push(...targetRoutes(result.graph, result.end, offset))
+  assert.equal(routes.length, 120)
+  assert.equal(new Set(routes.map(route => route.path.join(','))).size, 120)
+  for (const route of routes) {
+    assert.equal(route.path.length, 6)
+    assert.equal(new Set(route.path).size, 6)
+    assert.equal(route.moves.length, 5)
+    for (let i = 1; i < route.path.length; i++) assert.equal(differences(route.path[i - 1], route.path[i]), 1)
+  }
+  assert.deepEqual(targetRoutes(result.graph, result.end, 120n), [])
+})
+
+test('identical endpoints have exactly one zero-step path; disconnected endpoints have none', () => {
+  const dictionary = new Set(['AAA', 'ZZZ'])
+  const same = solveLadder('AAA', 'AAA', dictionary)
+  assert.deepEqual(targetRoutes(same.graph, same.end), [{ path: ['AAA'], moves: [] }])
+  const disconnected = solveLadder('AAA', 'ZZZ', dictionary)
+  assert.equal(disconnected.path, null)
+  assert.deepEqual(targetRoutes(disconnected.graph, disconnected.end), [])
+})
 
 test('exploration retains every shortest route and excludes repeated words and longer detours', () => {
   const dictionary = new Set(['AAA', 'AAB', 'ABA', 'ABB', 'BBB', 'ZZZ'])
@@ -197,4 +224,42 @@ test('BLACK exploration contains every dictionary neighbor, SLACK at one step, a
   const second = new Set(immediate.flatMap(word => [...dictionary].filter(next => differences(word, next) === 1 && next !== 'BLACK' && !immediate.includes(next))))
   assert.deepEqual(new Set(result.levels[1]), second)
   assert.ok(explorationPaths(result, 'SLICK', 0n, 100).some(path => path.join(',') === 'BLACK,SLACK,SLICK'))
+})
+
+// Independent pairwise adjacency and explicit shortest-path enumeration.
+test('all two-word shortest paths agree with exhaustive enumeration for every move-rule combination', () => {
+  const words = ['A', 'AB', 'BA', 'AAB', 'ABA', 'BAA', 'ABB', 'BAB', 'BBA', 'ABC', 'CAB', 'BCA', 'ZZZ']
+  const dictionary = new Set(words)
+  for (const addDelete of [false, true]) for (const rearrange of ['off', 'swap', 'permute']) for (const move of [false, true]) {
+    const options = { addDelete, rearrange, move }
+    const start = 'AAB'
+    const expected = new Map([[start, [[start]]]])
+    let frontier = [[start]]
+    for (let depth = 1; frontier.length; depth++) {
+      const nextFrontier = []
+      for (const path of frontier) for (const next of words) {
+        if (path.includes(next) || !permitted(path.at(-1), next, options)) continue
+        if (expected.has(next) && expected.get(next)[0].length < depth + 1) continue
+        const nextPath = [...path, next]
+        if (!expected.has(next)) expected.set(next, [])
+        expected.get(next).push(nextPath)
+        nextFrontier.push(nextPath)
+      }
+      frontier = nextFrontier
+    }
+    for (const end of words) {
+      if (!addDelete && end.length !== start.length) continue
+      const result = solveLadder(start, end, dictionary, options)
+      const paths = expected.get(end) ?? []
+      assert.equal(result.graph.nodes[end]?.pathCount ?? '0', String(paths.length))
+      const routes = targetRoutes(result.graph, end, 0n, Math.max(paths.length, 1))
+      assert.deepEqual(new Set(routes.map(route => route.path.join(','))), new Set(paths.map(path => path.join(','))))
+      for (const route of routes) {
+        assert.equal(new Set(route.path).size, route.path.length)
+        assert.equal(route.moves.length, route.path.length - 1)
+        assert.ok(route.moves.every(Boolean))
+        for (let i = 1; i < route.path.length; i++) assert.ok(permitted(route.path[i - 1], route.path[i], options))
+      }
+    }
+  }
 })

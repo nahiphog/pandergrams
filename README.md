@@ -44,8 +44,12 @@ Every operation costs one step and must produce a dictionary word. Endpoints
 must have equal length unless adding/deleting is enabled; that option also allows
 paths through other word lengths even when both endpoints have the same length.
 
-The separate worker runs exhaustive breadth-first search and returns one shortest
-path with its step count, operation descriptions, and affected letters highlighted.
+The separate worker runs breadth-first search and retains every shortest path
+between the two endpoints. Results show the step count and all paths, paginated
+ten at a time, with expandable operation descriptions. No word repeats within any
+path. A compact predecessor graph and exact path counts retain every route without
+materializing all paths in memory; pagination never drops results. The search
+finishes the entire predecessor layer of the destination to collect all ties.
 Deletions identify the removed letter and its original position. Permutations
 use indexed dictionary anagrams rather than generating every possible ordering.
 Identical words

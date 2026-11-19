@@ -5,7 +5,7 @@ export type LadderOptions = {
 }
 export type LadderMove = { description: string; positions: number[] }
 export type LadderRoute = { path: string[]; moves: LadderMove[] }
-export type LadderResult = { path: string[] | null; moves: LadderMove[]; explored: number; limited?: boolean; reason?: string; routes?: LadderRoute[]; complete?: boolean }
+export type LadderResult = { path: string[] | null; moves: LadderMove[]; explored: number; limited?: boolean; reason?: string; routes?: LadderRoute[]; complete?: boolean; graph?: ExplorationResult; end?: string }
 
 export type OrderedLimits = { maxStates?: number; maxMs?: number; now?: () => number }
 
@@ -67,7 +67,7 @@ export function solveOrderedLadder(waypoints: string[], dictionary: ReadonlySet<
 const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 const signature = (word: string) => [...word].sort().join('')
 
-export type ExplorationNode = { depth: number; parents: string[]; pathCount: string }
+export type ExplorationNode = { depth: number; parents: string[]; pathCount: string; parentMoves?: Record<string, LadderMove> }
 export type ExplorationResult = {
   start: string
   levels: string[][]
@@ -140,32 +140,42 @@ export function solveLadder(start: string, end: string, dictionary: ReadonlySet<
     }
   }
   if (!options.addDelete && start.length !== end.length) throw new Error('Both words must have the same number of letters unless adding/deleting is enabled.')
-  if (start === end) return { path: [start], moves: [], explored: 0 }
-
-  const neighbors = createNeighbors(dictionary, options, start.length)
-
-  const parents = new Map<string, { word: string; move: LadderMove } | null>([[start, null]])
+  const graph: ExplorationResult = { start, levels: [], nodes: { [start]: { depth: 0, parents: [], pathCount: '1', parentMoves: {} } }, explored: 0 }
+  const neighbors = createNeighbors(dictionary, options, start.length, false)
   const queue = [start]
+  let goalDepth = start === end ? 0 : Infinity
   for (let head = 0; head < queue.length; head++) {
     const word = queue[head]
+    const node = graph.nodes[word]
+    if (node.depth >= goalDepth) break
+    graph.explored++
+    const seen = new Set<string>()
     for (const [next, move] of neighbors(word)) {
-      if (!next || !dictionary.has(next) || parents.has(next)) continue
-      parents.set(next, { word, move })
-      if (next === end) {
-        const path = [end]
-        const moves: LadderMove[] = []
-        let parent = parents.get(end)!
-        while (parent) {
-          path.push(parent.word)
-          moves.push(parent.move)
-          parent = parents.get(parent.word)!
-        }
-        return { path: path.reverse(), moves: moves.reverse(), explored: head + 1 }
+      if (!next || !dictionary.has(next) || seen.has(next)) continue
+      seen.add(next)
+      const depth = node.depth + 1
+      if (!graph.nodes[next]) {
+        graph.nodes[next] = { depth, parents: [], pathCount: '0', parentMoves: {} }
+        queue.push(next)
       }
-      queue.push(next)
+      const nextNode = graph.nodes[next]
+      if (nextNode.depth !== depth) continue
+      nextNode.parents.push(word)
+      nextNode.parentMoves![word] = move
+      nextNode.pathCount = (BigInt(nextNode.pathCount) + BigInt(node.pathCount)).toString()
+      if (next === end) goalDepth = depth
     }
   }
-  return { path: null, moves: [], explored: queue.length }
+  const first = targetRoutes(graph, end, 0n, 1)[0]
+  return { path: first?.path ?? null, moves: first?.moves ?? [], explored: graph.explored, graph, end, complete: true }
+}
+
+/** Recover only the requested page; the predecessor graph retains every route. */
+export function targetRoutes(graph: ExplorationResult, end: string, offset = 0n, limit = 10): LadderRoute[] {
+  return explorationPaths(graph, end, offset, limit).map(path => ({
+    path,
+    moves: path.slice(1).map((word, index) => graph.nodes[word].parentMoves![path[index]]),
+  }))
 }
 
 function createNeighbors(dictionary: ReadonlySet<string>, options: LadderOptions, startLength: number, consumeAnagrams = true) {
