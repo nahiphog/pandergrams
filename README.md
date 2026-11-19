@@ -36,13 +36,21 @@ For a six-move example, enter these five words:
 
 Open **Word ladder** in the navigation (or `word-ladder.html`) to connect a
 starting word to an ending word using the same bundled Norvig dictionary.
-Both words must be in the list and have equal length. Each move replaces exactly
-one letter; adding, deleting, and rearranging letters are not allowed.
+Both words must be in the list. Replacing exactly one letter is always allowed.
+Optional moves are all disabled by default: add/delete exactly one letter,
+rearrange letters (choose a two-position swap or any permutation), and move one
+letter to another position while preserving the order of the other letters.
+Every operation costs one step and must produce a dictionary word. Endpoints
+must have equal length unless adding/deleting is enabled; that option also allows
+paths through other word lengths even when both endpoints have the same length.
 
 The separate worker runs exhaustive breadth-first search and returns one shortest
-path with its change count and each changed letter highlighted. Identical words
+path with its step count, operation descriptions, and affected letters highlighted.
+Deletions identify the removed letter and its original position. Permutations
+use indexed dictionary anagrams rather than generating every possible ordering.
+Identical words
 take zero changes; disconnected words produce a no-ladder result only after the
-reachable words are exhausted. Editing or clearing inputs cancels and clears the
+reachable words are exhausted. Editing inputs or rules cancels and clears the
 search. Cancel stops the worker without claiming no solution exists.
 The production build includes both HTML pages for direct links on GitHub Pages.
 

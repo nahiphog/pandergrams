@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { dictionary, loadDictionary } from './dictionary'
-import type { LadderResult } from './ladder'
+import type { LadderOptions, LadderResult } from './ladder'
 import type { LadderRequest, LadderResponse } from './ladder.worker'
 import './styles.css'
 
@@ -14,9 +14,10 @@ function WordLadder() {
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<LadderResult | null>(null)
   const [notice, setNotice] = useState('')
+  const [options, setOptions] = useState<LadderOptions>({ addDelete: false, rearrange: 'off', move: false })
   const worker = useRef<Worker | null>(null)
   const errors = words.map(word => !word ? 'Enter a word.' : !/^[A-Z]+$/.test(word) ? 'Use letters A–Z only.' : lexicon && !lexicon.has(word) ? 'Not in the dictionary.' : '')
-  const lengthError = words.every(Boolean) && words[0].length !== words[1].length ? 'Both words must have the same number of letters.' : ''
+  const lengthError = !options.addDelete && words.every(Boolean) && words[0].length !== words[1].length ? 'Use words of the same length, or enable adding/deleting a letter.' : ''
 
   useEffect(() => {
     const controller = new AbortController()
@@ -64,7 +65,7 @@ function WordLadder() {
         setNotice('The search failed. Please try again.')
         stop()
       }
-      active.postMessage({ start: words[0], end: words[1], words: [...lexicon].filter(word => word.length === words[0].length) } satisfies LadderRequest)
+      active.postMessage({ start: words[0], end: words[1], words: [...lexicon].filter(word => options.addDelete || word.length === words[0].length), options } satisfies LadderRequest)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Unable to start the search.')
       stop()
@@ -78,9 +79,9 @@ function WordLadder() {
         <div className="page-links"><a href={import.meta.env.BASE_URL}>Pandergrams</a><a href={`${import.meta.env.BASE_URL}word-ladder.html`} aria-current="page">Word ladder</a></div>
       </nav>
       <section className="workspace word-panel" aria-labelledby="ladder-heading">
-        <p className="eyebrow">One letter at a time</p>
+        <p className="eyebrow">One step at a time</p>
         <h1 id="ladder-heading">Word ladder</h1>
-        <p className="helper">Connect two words in the fewest changes. Each step replaces exactly one letter to form another word in the same word list used by Pandergram Solver. No adding, removing, or rearranging letters.</p>
+        <p className="helper">Connect two words in the fewest steps. Replacing exactly one letter is always allowed. Enable extra moves below to explore more connections. Every step must form a word in the same word list used by Pandergram Solver.</p>
         <p className="dictionary-note"><a href="https://norvig.com/ngrams/word.list" target="_blank" rel="noreferrer">{dictionary.source}</a> · {lexicon ? `${lexicon.size.toLocaleString()} words loaded` : dictionaryError ? 'Unavailable' : 'Loading…'}</p>
         {dictionaryError && <p role="alert" className="field-error">{dictionaryError} <button onClick={() => setRetry(value => value + 1)}>Retry</button></p>}
         <form onSubmit={event => { event.preventDefault(); search() }}>
@@ -94,6 +95,19 @@ function WordLadder() {
             ))}
           </div>
           <p id="ladder-length-error" className="field-error">{lengthError}</p>
+          <fieldset className="ladder-options">
+            <legend>Optional moves</legend>
+            <p id="ladder-options-help">All off by default. Each enabled operation counts as one step. Changing a rule cancels and clears the current search.</p>
+            <label className="ladder-toggle"><input type="checkbox" checked={!!options.addDelete} onChange={event => { edit(words); setOptions({ ...options, addDelete: event.target.checked }) }} /> Add or delete exactly one letter</label>
+            <label className="ladder-rearrange" htmlFor="ladder-rearrange">Rearrange letters</label>
+            <select id="ladder-rearrange" value={options.rearrange} aria-describedby="ladder-options-help" onChange={event => { edit(words); setOptions({ ...options, rearrange: event.target.value as LadderOptions['rearrange'] }) }}>
+              <option value="off">Off</option>
+              <option value="swap">Swap positions of two letters</option>
+              <option value="permute">Permute the entire word (any rearrangement)</option>
+            </select>
+            <label className="ladder-toggle"><input type="checkbox" checked={!!options.move} onChange={event => { edit(words); setOptions({ ...options, move: event.target.checked }) }} /> Move one letter to another position</label>
+            <p>Moving a letter keeps all other letters in their relative order. Permutation allows any rearrangement of the same letters.</p>
+          </fieldset>
           <div className="search-actions">
             <button className="primary-button" type="submit" disabled={!lexicon || running}>{running ? 'Searching…' : 'Find shortest ladder'}</button>
             <button type="button" onClick={() => { edit(['', '']); setTouched([false, false]) }}>Clear input</button>
@@ -103,10 +117,10 @@ function WordLadder() {
       </section>
       <section className="results-panel" aria-labelledby="ladder-results-heading" aria-busy={running}>
         <div role="status">
-          <h2 id="ladder-results-heading">{running ? 'Finding your ladder…' : result?.path ? `Shortest ladder: ${result.path.length - 1} ${result.path.length === 2 ? 'change' : 'changes'}` : result ? 'No ladder found' : 'Your shortest ladder'}</h2>
-          {notice ? <p>{notice}</p> : running ? <p>Exploring words in order of distance from your starting word.</p> : result?.path ? <p>{result.path.length === 1 ? 'The starting and ending words are identical. No changes needed.' : 'One shortest path is shown below. The changed letter is highlighted in each step.'}</p> : result ? <p>No sequence of single-letter changes connects these words in the bundled word list.</p> : <p>Enter two words of the same length, then find their shortest connection.</p>}
+          <h2 id="ladder-results-heading">{running ? 'Finding your ladder…' : result?.path ? `Shortest ladder: ${result.path.length - 1} ${result.path.length === 2 ? 'step' : 'steps'}` : result ? 'No ladder found' : 'Your shortest ladder'}</h2>
+          {notice ? <p>{notice}</p> : running ? <p>Exploring words in order of distance from your starting word.</p> : result?.path ? <p>{result.path.length === 1 ? 'The starting and ending words are identical. No changes needed.' : 'One shortest path under your selected rules is shown below. Each step describes the operation used.'}</p> : result ? <p>No sequence of enabled moves connects these words in the bundled word list.</p> : <p>Enter two words, choose your move rules, then find their shortest connection.</p>}
         </div>
-        {result?.path && <ol className="ladder-path" aria-label="Shortest word ladder">{result.path.map((word, index, path) => <li key={word}><span className="ladder-step">{index === 0 ? 'Start' : `Step ${index}`}</span><span className="ladder-word">{[...word].map((letter, position) => index > 0 && letter !== path[index - 1][position] ? <mark className="changed-letter" key={position} title={`${path[index - 1][position]} → ${letter}`}>{letter}</mark> : <span key={position}>{letter}</span>)}</span>{index === path.length - 1 && <span className="count-pill">Finish</span>}</li>)}</ol>}
+        {result?.path && <ol className="ladder-path" aria-label="Shortest word ladder">{result.path.map((word, index, path) => <li key={word}><span className="ladder-step">{index === 0 ? 'Start' : `Step ${index}`}</span><div className="ladder-transition"><span className="ladder-word">{[...word].map((letter, position) => index > 0 && result.moves[index - 1].positions.includes(position) ? <mark className="changed-letter" key={position}>{letter}</mark> : <span key={position}>{letter}</span>)}</span>{index > 0 && <p className="ladder-operation">{result.moves[index - 1].description}</p>}</div>{index === path.length - 1 && <span className="count-pill">Finish</span>}</li>)}</ol>}
         {result && <p className="search-stats">{result.explored.toLocaleString()} words explored · Exact breadth-first search</p>}
       </section>
     </main>
