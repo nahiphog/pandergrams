@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { solve, letterMask, FULL_ALPHABET, missingLetterCount } from '../src/solver.ts'
+import { solve, letterMask, FULL_ALPHABET, missingLetterCount, WordSearchCache } from '../src/solver.ts'
 
 const filler = 'DEFGHIJKLMNOPQRSTUVWXYZ'
 const dict = (...words) => new Set([filler, ...words])
@@ -299,4 +299,74 @@ test('all returned alternative chains are valid and have minimum total cost', ()
     assert.deepEqual(bank,solution.words)
     assert.equal(new Set(bank.join('')).size,26)
   }
+})
+
+test('repeated searches reuse complete word graphs without changing all solutions', () => {
+  const dictionary=dict('AAA','ABA','AAC','ABC'), cache=new WordSearchCache()
+  const cold=solve(['AAA',filler],dictionary,{cache})
+  const warm=solve(['AAA',filler],dictionary,{cache})
+  assert.equal(cold.cachedWordSearches,0)
+  assert.equal(warm.cachedWordSearches,2)
+  assert.deepEqual(warm.solutions,cold.solutions)
+  assert.equal(warm.complete,true)
+  assert.equal(warm.discovered,cold.discovered)
+  assert.ok(warm.explored<cold.explored)
+})
+test('exclusion keys normalize case, whitespace, ordering, and duplicates', () => {
+  const dictionary=dict('AAA','ABA','AAC','ABC'), cache=new WordSearchCache()
+  const cold=solve(['AAA',filler],dictionary,{cache,excludedWords:[' aba ','UNKNOWN']})
+  const warm=solve(['AAA',filler],dictionary,{cache,excludedWords:['unknown','ABA','aba','']})
+  assert.equal(warm.cachedWordSearches,2)
+  assert.deepEqual(warm.solutions,cold.solutions)
+  const changed=solve(['AAA',filler],dictionary,{cache,excludedWords:['AAC']})
+  assert.equal(changed.cachedWordSearches,0)
+  assert.ok(changed.solutions.every(s=>s.moves.every(m=>m.to!=='AAC')))
+  assert.equal(solve(['AAA',filler],dictionary,{cache,excludedWords:['ABA','UNKNOWN']}).cachedWordSearches,2)
+})
+test('dictionary content changes invalidate cache, including same-size mutations', () => {
+  const dictionary=dict('AAA','ABA','AAC','ABC'), cache=new WordSearchCache()
+  solve(['AAA',filler],dictionary,{cache})
+  assert.equal(solve(['AAA',filler],new Set(dictionary),{cache}).cachedWordSearches,2)
+  dictionary.delete('ABA');dictionary.add('ACA')
+  const changed=solve(['AAA',filler],dictionary,{cache})
+  assert.equal(changed.cachedWordSearches,0)
+  assert.deepEqual(changed.solutions,solve(['AAA',filler],dictionary).solutions)
+})
+test('partial BFS graphs are never reused after a state-limit stop', () => {
+  const dictionary=dict('AAA','ABA','AAC','ABC'),cache=new WordSearchCache()
+  assert.equal(solve(['AAA',filler],dictionary,{cache,maxStates:2}).status,'limited')
+  const retry=solve(['AAA',filler],dictionary,{cache})
+  assert.equal(retry.cachedWordSearches,0)
+  assert.equal(retry.solutions.length,2)
+})
+test('complete earlier graphs survive a later word-search limit', () => {
+  const dictionary=dict('AAA','ABA','AAC','ABC'),cache=new WordSearchCache()
+  assert.equal(solve([filler,'AAA'],dictionary,{cache,maxStates:2}).status,'limited')
+  const retry=solve([filler,'AAA'],dictionary,{cache})
+  assert.equal(retry.cachedWordSearches,1)
+  assert.equal(retry.complete,true)
+})
+test('cached graphs continue to respect smaller state limits', () => {
+  const dictionary=dict('AAA','ABA','AAC','ABC'),cache=new WordSearchCache()
+  solve(['AAA',filler],dictionary,{cache})
+  const result=solve(['AAA',filler],dictionary,{cache,maxStates:1})
+  assert.equal(result.status,'limited')
+  assert.ok(result.discovered<=1)
+})
+test('cached starting words can be reused in different row positions', () => {
+  const dictionary=dict('AAA','ABA','AAC','ABC'),cache=new WordSearchCache()
+  solve(['AAA',filler],dictionary,{cache})
+  const result=solve([filler,'AAA'],dictionary,{cache})
+  assert.equal(result.cachedWordSearches,2)
+  assert.ok(result.solutions.every(s=>s.moves.every(move=>move.row===1)))
+})
+test('cache evicts least recently used entries and skips oversized graphs', () => {
+  const a='B'.repeat(26),b='C'.repeat(26),c='D'.repeat(26),dictionary=new Set([a,b,c]),cache=new WordSearchCache(2,10)
+  solve([a],dictionary,{cache});solve([b],dictionary,{cache})
+  assert.equal(solve([a],dictionary,{cache}).cachedWordSearches,1)
+  solve([c],dictionary,{cache})
+  assert.equal(solve([b],dictionary,{cache}).cachedWordSearches,0)
+  const tiny=new WordSearchCache(32,1), words=dict('AAA','ABA','AAC','ABC')
+  solve(['AAA',filler],words,{cache:tiny})
+  assert.equal(solve(['AAA',filler],words,{cache:tiny}).cachedWordSearches,1)
 })

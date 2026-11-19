@@ -23,6 +23,8 @@ function App() {
   const [visibleSolutions, setVisibleSolutions] = useState(10)
   const [notice, setNotice] = useState('')
   const worker = useRef<Worker | null>(null)
+  const workerBusy = useRef(false)
+  const workerDictionary = useRef<Set<string> | null>(null)
   const searchId = useRef(0)
   const usedLetters = new Set(words.join('').replace(/[^A-Z]/g, ''))
   const missingLetters = alphabet.filter((letter) => !usedLetters.has(letter))
@@ -49,8 +51,14 @@ function App() {
 
   function stop() {
     searchId.current++
-    worker.current?.terminate()
-    worker.current = null
+    // Retain an idle worker and its cache. Synchronous searches are cancelled by
+    // terminating a busy worker; the next search starts with a fresh cache.
+    if (workerBusy.current) {
+      worker.current?.terminate()
+      worker.current = null
+      workerDictionary.current = null
+    }
+    workerBusy.current = false
     setRunning(false)
   }
 
@@ -73,7 +81,8 @@ function App() {
     setRunning(true)
     const id = searchId.current
     try {
-      const activeWorker = new Worker(new URL('./solver.worker.ts', import.meta.url), { type: 'module' })
+      workerBusy.current = true
+      const activeWorker = worker.current ?? new Worker(new URL('./solver.worker.ts', import.meta.url), { type: 'module' })
       worker.current = activeWorker
       activeWorker.onmessage = (event: MessageEvent<SearchResponse>) => {
         const message = event.data
@@ -84,6 +93,7 @@ function App() {
             setResult(message.result)
             setProgress(message.result)
           } else setNotice(message.message)
+          workerBusy.current = false
           stop()
         }
       }
@@ -92,8 +102,10 @@ function App() {
         setNotice('The search worker failed. Try again with a smaller word bank.')
         stop()
       }
-      const request: SearchRequest = { id, words: [...words], dictionary: [...lexicon], excludedWords, maxStates, maxMs: maxSeconds * 1000 }
+      const request: SearchRequest = { id, words: [...words], excludedWords, maxStates, maxMs: maxSeconds * 1000 }
+      if (workerDictionary.current !== lexicon) request.dictionary = [...lexicon]
       activeWorker.postMessage(request)
+      workerDictionary.current = lexicon
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Unable to start the search.')
       stop()
@@ -161,7 +173,7 @@ function App() {
         <p className="eyebrow">Shortest path</p>
         <h2 id="results-heading">{running ? (progress?.phase === 'combinations' ? 'Combining word coverage…' : progress?.phase === 'solutions' ? 'Collecting optimal walkthroughs…' : 'Exploring reachable words…') : result?.status === 'solved' ? `Solved in ${result.moves.length} ${result.moves.length === 1 ? 'move' : 'moves'}` : result?.status === 'impossible' ? 'No solution' : result?.status === 'limited' ? 'Search limit reached' : 'Your solution'}</h2>
         <div role="status">{notice && <p>{notice}</p>}{result && result.status !== 'solved' && <p>{result.reason}</p>}{result?.status === 'solved' && <p>Minimum guaranteed by exact search{excludedWords.length ? ' with these exclusions' : ''}. Final coverage: 26/26 letters.</p>}</div>
-        {progress && <p className="search-stats">{progress.phase === 'words' ? 'Word search' : progress.phase === 'combinations' ? 'Coverage combinations' : 'Solution collection'} · {progress.explored.toLocaleString()} explored · {progress.discovered.toLocaleString()} discovered · {(progress.elapsedMs / 1000).toFixed(1)}s</p>}
+        {progress && <p className="search-stats">{progress.phase === 'words' ? 'Word search' : progress.phase === 'combinations' ? 'Coverage combinations' : 'Solution collection'} · {progress.explored.toLocaleString()} explored · {progress.discovered.toLocaleString()} discovered · {(progress.elapsedMs / 1000).toFixed(1)}s{progress.cachedWordSearches ? ` · ${progress.cachedWordSearches} cached word searches reused` : ''}</p>}
         {!progress && <p>Edit the starting bank above and start a search to see each change.</p>}
         {result?.status === 'solved' && (
           <div>

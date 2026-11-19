@@ -10,13 +10,14 @@ export function missingLetterCount(mask: number): number {
   return count
 }
 export interface Move { row: number; position: number; from: string; to: string }
-export interface Progress { depth: number; explored: number; discovered: number; elapsedMs: number; phase?: 'words' | 'combinations' | 'solutions' }
+export interface Progress { depth: number; explored: number; discovered: number; elapsedMs: number; phase?: 'words' | 'combinations' | 'solutions'; cachedWordSearches?: number }
 export interface Solution { moves: Move[]; words: string[] }
 export type Result = Progress & (
   | { status: 'solved'; moves: Move[]; words: string[]; solutions: Solution[]; complete: boolean; reason?: string }
   | { status: 'impossible' | 'limited'; reason: string }
 )
 export interface SearchOptions {
+  cache?: WordSearchCache
   maxSolutions?: number
   excludedWords?: readonly string[]
   maxStates?: number
@@ -25,6 +26,53 @@ export interface SearchOptions {
   now?: () => number
 }
 interface WordNode { word: string; mask: number; distance: number; parents: { index: number; position: number }[] }
+
+/** Bounded LRU of complete BFS graphs, scoped to exact dictionary contents. */
+export class WordSearchCache {
+  private dictionary = new Set<string>()
+  private entries = new Map<string, { graph: WordNode[]; units: number }>()
+  private units = 0
+  private maxEntries: number
+  private maxUnits: number
+
+  constructor(maxEntries = 32, maxUnits = 500_000) {
+    if (![maxEntries, maxUnits].every(value => Number.isSafeInteger(value) && value > 0)) throw new Error('Cache limits must be positive whole numbers.')
+    this.maxEntries = maxEntries
+    this.maxUnits = maxUnits
+  }
+
+  bind(dictionary: Set<string>) {
+    // Compare contents, not just object identity: callers may mutate a Set or
+    // supply a fresh Set with identical words between searches.
+    if (dictionary.size === this.dictionary.size && [...dictionary].every(word => this.dictionary.has(word))) return
+    this.dictionary = new Set(dictionary)
+    this.entries.clear()
+    this.units = 0
+  }
+
+  get(key: string): WordNode[] | undefined {
+    const entry = this.entries.get(key)
+    if (!entry) return undefined
+    this.entries.delete(key)
+    this.entries.set(key, entry)
+    return entry.graph
+  }
+
+  put(key: string, graph: WordNode[]) {
+    // Count both graph nodes and predecessor edges, which can outnumber nodes.
+    const units = graph.reduce((sum, node) => sum + 1 + node.parents.length, 0)
+    if (units > this.maxUnits) return
+    const previous = this.entries.get(key)
+    if (previous) { this.units -= previous.units; this.entries.delete(key) }
+    while (this.entries.size >= this.maxEntries || this.units + units > this.maxUnits) {
+      const oldest = this.entries.keys().next().value!
+      this.units -= this.entries.get(oldest)!.units
+      this.entries.delete(oldest)
+    }
+    this.entries.set(key, { graph, units })
+    this.units += units
+  }
+}
 interface Group { mask: number; cost: number; endpoints: number[] }
 interface Row { row: number; graph: WordNode[]; groups: Group[] }
 interface Choice { previous: number; group: Group }
@@ -38,17 +86,17 @@ export function solve(start: string[], dictionary: Set<string>, options: SearchO
   if ([maxStates, maxMs, maxSolutions].some(value => !Number.isSafeInteger(value) || value < 1)) throw new Error('Search limits must be positive whole numbers within the supported numeric range.')
   const now = options.now ?? (() => performance.now())
   const began = now()
-  let lastReport = began, discovered = 0, explored = 0, depth = 0
+  let lastReport = began, discovered = 0, explored = 0, depth = 0, cachedWordSearches = 0
   let phase: Progress['phase'] = 'words'
-  const stats = (): Progress => ({ depth, explored, discovered, elapsedMs: now() - began, phase })
+  const stats = (): Progress => ({ depth, explored, discovered, elapsedMs: now() - began, phase, cachedWordSearches })
   const check = () => {
     const time = now()
     if (time - began >= maxMs) throw new SearchLimit('Time limit reached. The search is incomplete.')
     if (time - lastReport >= 150) { options.onProgress?.(stats()); lastReport = time }
   }
-  const reserve = () => {
-    if (discovered >= maxStates) throw new SearchLimit('State limit reached. The search is incomplete.')
-    discovered++
+  const reserve = (count = 1) => {
+    if (discovered + count > maxStates) throw new SearchLimit('State limit reached. The search is incomplete.')
+    discovered += count
   }
   const impossible = (reason: string): Result => ({ ...stats(), status: 'impossible', reason })
   if (start.reduce((mask, word) => mask | letterMask(word), 0) === FULL_ALPHABET) {
@@ -57,6 +105,7 @@ export function solve(start: string[], dictionary: Set<string>, options: SearchO
   }
   if (start.join('').length < 26) return impossible('Fewer than 26 letter positions cannot cover the alphabet.')
   const excluded = new Set((options.excludedWords ?? []).map(word => word.trim().toUpperCase()).filter(Boolean))
+  const exclusionKey = JSON.stringify([...excluded].sort())
   // Both caches are scoped to this dictionary and exclusion set; repeated rows share work.
   const graphCache = new Map<string, WordNode[]>()
   const neighborCache = new Map<string, { word: string; position: number }[]>()
@@ -81,9 +130,21 @@ export function solve(start: string[], dictionary: Set<string>, options: SearchO
   let optimum: number | undefined
   const solutions: Solution[] = []
   try {
+    options.cache?.bind(dictionary)
     for (let row = 0; row < start.length; row++) {
       check()
       let graph = graphCache.get(start[row])
+      const cacheKey = JSON.stringify([start[row], exclusionKey])
+      if (!graph) {
+        graph = options.cache?.get(cacheKey)
+        if (graph) {
+          // Cached graphs still occupy search state space; limits are independent
+          // of whether this is a cold or warm search.
+          reserve(graph.length)
+          cachedWordSearches++
+          graphCache.set(start[row], graph)
+        }
+      }
       if (!graph) {
         reserve()
         graph = [{ word: start[row], mask: letterMask(start[row]), distance: 0, parents: [] }]
@@ -101,6 +162,8 @@ export function solve(start: string[], dictionary: Set<string>, options: SearchO
           }
         }
         graphCache.set(start[row], graph)
+        // Never publish a partially explored graph to the cross-search cache.
+        options.cache?.put(cacheKey, graph)
       }
       rows.push({ row, graph, groups: [] })
     }

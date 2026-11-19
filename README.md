@@ -134,3 +134,20 @@ solutions. Every returned solution still has the proven minimum move count.
 
 Excluded words convert to uppercase as you type. Clear input empties all current
 word boxes and exclusions, cancels any running search, and clears all results.
+
+## Per-word search cache
+
+Completed pandergram word searches stay in the page's idle worker for reuse.
+The key includes the starting word and normalized, sorted exclusions; dictionary
+content changes invalidate the cache. Reordering rows or changing search limits
+can reuse the same graphs. Only fully explored word graphs are cached, including
+ones completed before another part of a search reaches a limit.
+
+An LRU policy bounds the cache to 32 graphs and 500,000 combined nodes and
+predecessor edges. Larger graphs are not retained. Cached nodes still count
+toward the selected state limit. Statistics show how many cached word searches
+were reused; the coverage combination search and walkthrough collection run anew.
+
+Editing or clearing inputs after a completed search keeps the cache. Cancelling
+or editing during an active search terminates the worker immediately and discards
+its cache. Reloading or leaving the page also clears it; nothing is saved to disk.
