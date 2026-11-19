@@ -124,8 +124,7 @@ function App() {
               </div>
             ))}
           </div>
-          <div className="edit-actions"><button onClick={() => edit([...words, ''])}>+ Add word</button><button onClick={() => { edit(words.map(() => '')); setExcludedInput('') }}>Clear input</button></div>
-          {!words.length && <p className="helper">Add at least one starting word.</p>}
+          <div className="edit-actions"><button onClick={() => { edit(initialWords.map(() => '')); setExcludedInput('') }}>Clear input</button></div>
           <div className="exclusions-field">
             <label htmlFor="excluded-words">Excluded words <span>(optional)</span></label>
             <input id="excluded-words" value={excludedInput} placeholder="e.g. SEXERS, VEXERS" spellCheck={false} autoComplete="off" aria-invalid={!!exclusionError} aria-describedby={`exclusions-help${exclusionError ? ' exclusions-error' : ''}`} onChange={(event) => { edit(words); setExcludedInput(event.target.value.toUpperCase()) }} />

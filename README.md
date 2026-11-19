@@ -14,7 +14,8 @@ npm test
 npm run build
 ```
 
-Edit, add, or remove starting words, then select **Find minimum changes**.
+Edit the five starting word boxes, then select **Find minimum changes**.
+The bank always has exactly five boxes; Clear input empties them without removing any.
 Every word must appear in the bundled [Norvig dictionary](https://norvig.com/ngrams/word.list).
 Input is normalized to uppercase. Substitutions preserve word lengths; duplicate
 words are allowed. Editing or resetting inputs cancels the current search and
@@ -27,8 +28,8 @@ allowed. Editing the list cancels and clears the current search. Clear the field
 to remove exclusions; the list is not persisted. A* still finds the fewest moves
 among solutions permitted by the exclusions.
 
-For a quick one-move example, enter these nine words:
-`THE QUICK BROWN FOX JUMPS OVER THE HAZY DOG`.
+For a six-move example, enter these five words:
+`MOBILIZES PRETESTING VERTEX HALLWAY SQUEALING`.
 
 ## Search behavior
 
