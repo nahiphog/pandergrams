@@ -15,12 +15,18 @@ function WordLadder() {
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<LadderResult | null>(null)
   const [exploration, setExploration] = useState<ExplorationResult | null>(null)
-  const [mode, setMode] = useState<'target' | 'explore'>('target')
+  const [mode, setMode] = useState<'target' | 'explore' | 'ordered'>('target')
+  const [waypointInput, setWaypointInput] = useState('')
+  const [waypointsTouched, setWaypointsTouched] = useState(false)
+  const [maxStates, setMaxStates] = useState(250000)
+  const [maxSeconds, setMaxSeconds] = useState(30)
+  const waypoints = waypointInput.trim().toUpperCase().split(/[\s,]+/).filter(Boolean)
   const [maxSteps, setMaxSteps] = useState(5)
   const [notice, setNotice] = useState('')
   const [options, setOptions] = useState<LadderOptions>({ addDelete: false, rearrange: 'off', move: false })
+  const waypointError = mode !== 'ordered' ? '' : waypoints.length < 3 ? 'Enter at least three words.' : new Set(waypoints).size !== waypoints.length ? 'Use distinct words; the entire route must have no repeats.' : waypoints.some(word => !/^[A-Z]+$/.test(word)) ? 'Use letters A–Z, separating words with spaces, commas, or new lines.' : lexicon && waypoints.some(word => !lexicon.has(word)) ? `Not in the dictionary: ${waypoints.filter(word => !lexicon.has(word)).join(', ')}` : !options.addDelete && waypoints.some(word => word.length !== waypoints[0].length) ? 'Use words of the same length, or enable adding/deleting a letter.' : ''
   const worker = useRef<Worker | null>(null)
-  const activeWords = mode === 'explore' ? words.slice(0, 1) : words
+  const activeWords = mode === 'ordered' ? [] : mode === 'explore' ? words.slice(0, 1) : words
   const errors = activeWords.map(word => !word ? 'Enter a word.' : !/^[A-Z]+$/.test(word) ? 'Use letters A–Z only.' : lexicon && !lexicon.has(word) ? 'Not in the dictionary.' : '')
   const lengthError = mode === 'target' && !options.addDelete && words.every(Boolean) && words[0].length !== words[1].length ? 'Use words of the same length, or enable adding/deleting a letter.' : ''
 
@@ -52,7 +58,8 @@ function WordLadder() {
 
   function search() {
     setTouched([true, true])
-    if (!lexicon || errors.some(Boolean) || lengthError) return
+    setWaypointsTouched(true)
+    if (!lexicon || errors.some(Boolean) || lengthError || waypointError) return
     stop()
     setResult(null)
     setExploration(null)
@@ -73,7 +80,8 @@ function WordLadder() {
         setNotice('The search failed. Please try again.')
         stop()
       }
-      active.postMessage({ start: words[0], end: words[1], words: [...lexicon].filter(word => options.addDelete || word.length === words[0].length), options, mode, maxSteps } satisfies LadderRequest)
+      const start = mode === 'ordered' ? waypoints[0] : words[0]
+      active.postMessage({ start, end: words[1], words: [...lexicon].filter(word => options.addDelete || word.length === start.length), options, mode, maxSteps, waypoints, maxStates, maxMs: maxSeconds * 1000 } satisfies LadderRequest)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Unable to start the search.')
       stop()
@@ -97,8 +105,20 @@ function WordLadder() {
             <legend>Search mode</legend>
             <label className="ladder-toggle"><input type="radio" name="ladder-mode" checked={mode === 'target'} onChange={() => { edit(words); setMode('target') }} /> Connect two words</label>
             <label className="ladder-toggle"><input type="radio" name="ladder-mode" checked={mode === 'explore'} onChange={() => { edit(words); setMode('explore') }} /> Explore all words from a starting word</label>
+            <label className="ladder-toggle"><input type="radio" name="ladder-mode" checked={mode === 'ordered'} onChange={() => { edit(words); setMode('ordered') }} /> Visit multiple words in order</label>
             {mode === 'explore' && <><label htmlFor="ladder-depth">Maximum steps</label><select id="ladder-depth" value={maxSteps} onChange={event => { edit(words); setMaxSteps(Number(event.target.value)) }}>{[1, 2, 3, 4, 5].map(depth => <option key={depth} value={depth}>{depth} {depth === 1 ? 'step' : 'steps'}</option>)}</select><p>Find every reachable word and every shortest path within this limit. Paths never repeat a word. Results are grouped by minimum step count.</p></>}
           </fieldset>
+          {mode === 'ordered' && <div className="ordered-words">
+            <label htmlFor="ordered-words">Words to visit, in order</label>
+            <p id="ordered-help">Enter at least three distinct words, separated by spaces, commas, or new lines. The route starts at the first word and ends at the last. Intermediate dictionary words are allowed, but no word can appear twice and later requested words cannot be visited early.</p>
+            <textarea id="ordered-words" rows={4} value={waypointInput} placeholder="COLD, CORD, CARD, WARD, WARM" spellCheck={false} aria-invalid={waypointsTouched && !!waypointError} aria-describedby="ordered-help ordered-error" onBlur={() => setWaypointsTouched(true)} onChange={event => { edit(words); setWaypointInput(event.target.value.toUpperCase()); setWaypointsTouched(true) }} />
+            <p id="ordered-error" className="field-error">{waypointsTouched ? waypointError : ''}</p>
+            <fieldset className="ladder-options"><legend>Ordered search limits</legend>
+              <label htmlFor="ordered-states">Maximum states</label><select id="ordered-states" value={maxStates} onChange={event => { edit(words); setMaxStates(Number(event.target.value)) }}>{[50000, 250000, 1000000].map(value => <option key={value} value={value}>{value.toLocaleString()}</option>)}</select>
+              <label htmlFor="ordered-seconds">Time limit</label><select id="ordered-seconds" value={maxSeconds} onChange={event => { edit(words); setMaxSeconds(Number(event.target.value)) }}>{[10, 30, 60, 120].map(value => <option key={value} value={value}>{value} seconds</option>)}</select>
+              <p>Long routes can require many searches. A reached limit is inconclusive, not proof that a route is impossible.</p>
+            </fieldset>
+          </div>}
           <div className="ladder-inputs">
             {activeWords.map((word, index) => (
               <div className="exclusions-field" key={index}>
@@ -116,15 +136,15 @@ function WordLadder() {
             <label className="ladder-rearrange" htmlFor="ladder-rearrange">Rearrange letters</label>
             <select id="ladder-rearrange" value={options.rearrange} aria-describedby="ladder-options-help" onChange={event => { edit(words); setOptions({ ...options, rearrange: event.target.value as LadderOptions['rearrange'] }) }}>
               <option value="off">Off</option>
-              <option value="swap">Swap positions of two letters</option>
-              <option value="permute">Permute the entire word (any rearrangement)</option>
+              <option value="swap">Swap two letters</option>
+              <option value="permute">Permute entire word</option>
             </select>
             <label className="ladder-toggle"><input type="checkbox" checked={!!options.move} onChange={event => { edit(words); setOptions({ ...options, move: event.target.checked }) }} /> Move one letter to another position</label>
             <p>Moving a letter keeps all other letters in their relative order. Permutation allows any rearrangement of the same letters.</p>
           </fieldset>
           <div className="search-actions">
-            <button className="primary-button" type="submit" disabled={!lexicon || running}>{running ? 'Searching…' : mode === 'explore' ? 'Find all reachable words' : 'Find shortest ladder'}</button>
-            <button type="button" onClick={() => { edit(['', '']); setTouched([false, false]) }}>Clear input</button>
+            <button className="primary-button" type="submit" disabled={!lexicon || running}>{running ? 'Searching…' : mode === 'explore' ? 'Find all reachable words' : mode === 'ordered' ? 'Find shortest ordered route' : 'Find shortest ladder'}</button>
+            <button type="button" onClick={() => { edit(['', '']); setTouched([false, false]); setWaypointInput(''); setWaypointsTouched(false) }}>Clear input</button>
             {running && <button type="button" onClick={() => { stop(); setNotice('Search cancelled. No conclusion was reached.') }}>Cancel</button>}
           </div>
         </form>
@@ -134,11 +154,12 @@ function WordLadder() {
           <div role="status"><h2 id="ladder-results-heading">{running ? 'Exploring all shortest paths…' : exploration ? 'Reachable words and shortest paths' : 'Explore from your starting word'}</h2><p>{notice || (running ? 'Searching every reachable word within your step limit.' : exploration ? 'Search complete. All reachable words and shortest paths are available below.' : 'Enter a starting word and choose a step limit from 1 to 5.')}</p></div>
           {exploration && <LadderExploration result={exploration} />}
         </> : <><div role="status">
-          <h2 id="ladder-results-heading">{running ? 'Finding your ladder…' : result?.path ? `Shortest ladder: ${result.path.length - 1} ${result.path.length === 2 ? 'step' : 'steps'}` : result ? 'No ladder found' : 'Your shortest ladder'}</h2>
-          {notice ? <p>{notice}</p> : running ? <p>Exploring words in order of distance from your starting word.</p> : result?.path ? <p>{result.path.length === 1 ? 'The starting and ending words are identical. No changes needed.' : 'One shortest path under your selected rules is shown below. Each step describes the operation used.'}</p> : result ? <p>No sequence of enabled moves connects these words in the bundled word list.</p> : <p>Enter two words, choose your move rules, then find their shortest connection.</p>}
+          <h2 id="ladder-results-heading">{running ? 'Finding your ladder…' : result?.path ? `Shortest ladder: ${result.path.length - 1} ${result.path.length === 2 ? 'step' : 'steps'}` : result?.limited ? 'Search limit reached' : result ? 'No ladder found' : 'Your shortest ladder'}</h2>
+          {notice ? <p>{notice}</p> : running ? <p>Searching for a shortest complete route.</p> : result?.limited ? <p>{result.reason}</p> : result?.path ? <p>{mode === 'ordered' ? 'All requested words are visited in order. No word repeats anywhere in this shortest route.' : result.path.length === 1 ? 'The starting and ending words are identical. No changes needed.' : 'One shortest path under your selected rules is shown below. Each step describes the operation used.'}</p> : result ? <p>{mode === 'ordered' ? 'No route visits all requested words in order without repeating a word under the selected rules.' : 'No sequence of enabled moves connects these words in the bundled word list.'}</p> : <p>{mode === 'ordered' ? 'Enter three or more words in order, then find a route through them.' : 'Enter two words, choose your move rules, then find their shortest connection.'}</p>}
         </div>
         {result?.path && <ol className="ladder-path" aria-label="Shortest word ladder">{result.path.map((word, index, path) => <li key={word}><span className="ladder-step">{index === 0 ? 'Start' : `Step ${index}`}</span><div className="ladder-transition"><span className="ladder-word">{[...word].map((letter, position) => index > 0 && result.moves[index - 1].positions.includes(position) ? <mark className="changed-letter" key={position}>{letter}</mark> : <span key={position}>{letter}</span>)}</span>{index > 0 && <p className="ladder-operation">{result.moves[index - 1].description}</p>}</div>{index === path.length - 1 && <span className="count-pill">Finish</span>}</li>)}</ol>}
-        {result && <p className="search-stats">{result.explored.toLocaleString()} words explored · Exact breadth-first search</p>}
+        {mode === 'ordered' && result?.path && <p>Requested order: {waypoints.join(' → ')}</p>}
+        {result && <p className="search-stats">{result.explored.toLocaleString()} {mode === 'ordered' ? 'route states' : 'words'} explored · Exact breadth-first search</p>}
         </>}
       </section>
     </main>

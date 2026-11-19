@@ -66,6 +66,19 @@ without a result cap. Results use pages of 100 words and 25 paths for responsive
 display; every word and path remains accessible. Switching mode or changing the
 step limit cancels and clears the search. The original two-word mode is unchanged.
 
+Choose **Visit multiple words in order** to enter three or more distinct words,
+separated by spaces, commas, or new lines. The route starts at the first word,
+visits every requested word in order, and ends at the last. No word—including
+intermediate dictionary words—can repeat anywhere in the route, and later
+requested words cannot be used early. All enabled move rules apply.
+
+Ordered mode searches complete simple paths using breadth-first search, so a
+returned route has the fewest total steps. It does not concatenate independently
+chosen pairwise ladders, which can conflict with the no-repeat rule. Search is
+bounded by configurable state and time limits (defaults: 250,000 states and 30
+seconds). A limit is reported as inconclusive, separately from an exhaustive
+no-route result. Editing words, rules, mode, or limits clears and cancels the search.
+
 ## Pandergram search behavior
 
 The solver separates the problem into independent word searches and an exact

@@ -104,6 +104,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .ladder-toggle input { width: 18px; height: 18px; margin: 3px 0 0; flex-shrink: 0; accent-color: #1e3144; }
 .ladder-rearrange { display: block; margin-bottom: 8px; }
 .ladder-options select { width: 100%; padding: 10px; border: 1px solid #c5cfc8; border-radius: 8px; background: #fafbf7; color: #263b4c; }
+#ladder-rearrange { width: auto; max-width: 100%; }
+.ordered-words > label { display: block; font-weight: 600; margin-bottom: 8px; }
+.ordered-words p { font-size: 14px; line-height: 1.5; }
+.ordered-words textarea { width: 100%; resize: vertical; padding: 12px; border: 1px solid #c5cfc8; border-radius: 8px; font: inherit; background: #fafbf7; color: #263b4c; }
+.ordered-words textarea:focus-visible { outline: 3px solid #d66350; outline-offset: 3px; }
+.ordered-words textarea[aria-invalid="true"] { border-color: #a23324; }
+.ordered-words select { width: auto; max-width: 100%; margin: 8px 16px 8px 8px; }
 .ladder-transition { min-width: 0; }
 .ladder-operation { font-size: 14px; color: #657384; margin: 4px 0 0; }
 .exploration-words { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }

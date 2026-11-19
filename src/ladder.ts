@@ -4,7 +4,56 @@ export type LadderOptions = {
   move?: boolean
 }
 export type LadderMove = { description: string; positions: number[] }
-export type LadderResult = { path: string[] | null; moves: LadderMove[]; explored: number }
+export type LadderResult = { path: string[] | null; moves: LadderMove[]; explored: number; limited?: boolean; reason?: string }
+
+export type OrderedLimits = { maxStates?: number; maxMs?: number; now?: () => number }
+
+/** Search whole simple paths: the used words are part of the state, never just the current word. */
+export function solveOrderedLadder(waypoints: string[], dictionary: ReadonlySet<string>, options: LadderOptions = {}, limits: OrderedLimits = {}): LadderResult {
+  if (waypoints.length < 3) throw new Error('Enter at least three words in visit order.')
+  if (waypoints.some(word => !/^[A-Z]+$/.test(word) || !dictionary.has(word))) throw new Error('Every requested word must be in the dictionary.')
+  if (new Set(waypoints).size !== waypoints.length) throw new Error('Requested words must be distinct: the route cannot repeat a word.')
+  if (!options.addDelete && waypoints.some(word => word.length !== waypoints[0].length)) throw new Error('Use words of the same length, or enable adding/deleting a letter.')
+  const maxStates = limits.maxStates ?? 250000
+  const maxMs = limits.maxMs ?? 30000
+  if (![maxStates, maxMs].every(value => Number.isSafeInteger(value) && value > 0)) throw new Error('Search limits must be positive whole numbers.')
+  const now = limits.now ?? (() => performance.now())
+  const started = now()
+  const neighbors = createNeighbors(dictionary, options, waypoints[0].length, false)
+  const waypointIndex = new Map(waypoints.map((word, index) => [word, index]))
+  type State = { word: string; parent: number; nextWaypoint: number; move: LadderMove | null }
+  const queue: State[] = [{ word: waypoints[0], parent: -1, nextWaypoint: 1, move: null }]
+  let explored = 0
+  const limited = (reason: string): LadderResult => ({ path: null, moves: [], explored, limited: true, reason })
+  for (let head = 0; head < queue.length; head++) {
+    if (now() - started >= maxMs) return limited('Time limit reached. No conclusion was reached; increase the search limits and try again.')
+    const state = queue[head]
+    explored++
+    const used = new Set<string>()
+    for (let index = head; index !== -1; index = queue[index].parent) used.add(queue[index].word)
+    const seen = new Set<string>()
+    for (const [next, move] of neighbors(state.word)) {
+      if (now() - started >= maxMs) return limited('Time limit reached. No conclusion was reached; increase the search limits and try again.')
+      if (!next || !dictionary.has(next) || used.has(next) || seen.has(next)) continue
+      seen.add(next)
+      const requiredIndex = waypointIndex.get(next)
+      if (requiredIndex !== undefined && requiredIndex !== state.nextWaypoint) continue
+      const nextWaypoint = state.nextWaypoint + (requiredIndex === state.nextWaypoint ? 1 : 0)
+      if (nextWaypoint === waypoints.length) {
+        const path = [next]
+        const moves = [move]
+        for (let index = head; index !== -1; index = queue[index].parent) {
+          path.push(queue[index].word)
+          if (queue[index].move) moves.push(queue[index].move!)
+        }
+        return { path: path.reverse(), moves: moves.reverse(), explored }
+      }
+      if (queue.length >= maxStates) return limited('State limit reached. No conclusion was reached; increase the search limits and try again.')
+      queue.push({ word: next, parent: head, nextWaypoint, move })
+    }
+  }
+  return { path: null, moves: [], explored }
+}
 
 const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 const signature = (word: string) => [...word].sort().join('')
