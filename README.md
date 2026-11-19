@@ -72,12 +72,19 @@ visits every requested word in order, and ends at the last. No word—including
 intermediate dictionary words—can repeat anywhere in the route, and later
 requested words cannot be used early. All enabled move rules apply.
 
-Ordered mode searches complete simple paths using breadth-first search, so a
-returned route has the fewest total steps. It does not concatenate independently
+Ordered mode searches complete simple paths using breadth-first search, retaining
+every route tied for the fewest total steps. It finishes the entire first goal
+layer instead of stopping at one route. Results are paginated ten routes at a
+time with expandable step details; pagination does not discard any routes.
+Every route individually has no repeated words; different routes may share words.
+It does not concatenate independently
 chosen pairwise ladders, which can conflict with the no-repeat rule. Search is
 bounded by configurable state and time limits (defaults: 250,000 states and 30
-seconds). A limit is reported as inconclusive, separately from an exhaustive
-no-route result. Editing words, rules, mode, or limits clears and cancels the search.
+seconds). Before any goal, a limit is reported as inconclusive, separately from
+an exhaustive no-route result. After a goal, a limit preserves the shortest routes
+already found and explicitly reports that more may exist. Only a completed search
+claims all shortest routes were found. Editing words, rules, mode, or limits clears
+and cancels the search.
 
 ## Pandergram search behavior
 

@@ -12,6 +12,16 @@ function verify(waypoints, dictionary, result, steps) {
   assert.equal(result.path[0], waypoints[0])
   assert.equal(result.path.at(-1), waypoints.at(-1))
   assert.ok(result.path.every(word => dictionary.has(word)))
+  assert.equal(result.complete, true)
+  assert.ok(result.routes.length)
+  assert.equal(new Set(result.routes.map(route => route.path.join(','))).size, result.routes.length)
+  for (const route of result.routes) {
+    assert.equal(route.path.length - 1, steps)
+    assert.equal(route.moves.length, steps)
+    assert.equal(new Set(route.path).size, route.path.length)
+    assert.deepEqual(route.path.filter(word => waypoints.includes(word)), waypoints)
+    assert.ok(route.path.every(word => dictionary.has(word)))
+  }
 }
 
 test('ordered search backtracks across segments instead of committing to a greedy first path', () => {
@@ -70,8 +80,14 @@ test('agrees with exhaustive simple-path enumeration on seeded small graphs', ()
     const waypoints = ['AAA', 'BBB', 'ABA']
     const dictionary = new Set([...waypoints, ...candidates.filter(() => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 2 ** 32 < .65 })])
     let best = Infinity
+    let expected = new Set()
     function visit(path, target) {
-      if (target === waypoints.length) { best = Math.min(best, path.length - 1); return }
+      if (target === waypoints.length) {
+        const distance = path.length - 1
+        if (distance < best) { best = distance; expected = new Set() }
+        if (distance === best) expected.add(path.join(','))
+        return
+      }
       for (const word of dictionary) {
         if (path.includes(word) || [...word].filter((letter, i) => letter !== path.at(-1)[i]).length !== 1) continue
         const index = waypoints.indexOf(word)
@@ -81,9 +97,39 @@ test('agrees with exhaustive simple-path enumeration on seeded small graphs', ()
     }
     visit([waypoints[0]], 1)
     const result = solveOrderedLadder(waypoints, dictionary)
+    assert.deepEqual(new Set(result.routes.map(route => route.path.join(','))), expected)
     if (Number.isFinite(best)) verify(waypoints, dictionary, result, best)
     else { assert.equal(result.path, null); assert.ok(!result.limited) }
   }
+})
+
+test('collects equal shortest routes and excludes longer simple detours', () => {
+  const dictionary = new Set(['AAA', 'ABA', 'AAB', 'ABB', 'BBB', 'BAA', 'BBA'])
+  const result = solveOrderedLadder(['AAA', 'ABB', 'BBB'], dictionary)
+  verify(['AAA', 'ABB', 'BBB'], dictionary, result, 3)
+  assert.deepEqual(new Set(result.routes.map(route => route.path.join(','))), new Set(['AAA,ABA,ABB,BBB', 'AAA,AAB,ABB,BBB']))
+})
+
+test('overlapping optional operations do not duplicate word sequences', () => {
+  const dictionary = new Set(['CAT', 'ACT', 'TAC'])
+  const result = solveOrderedLadder(['CAT', 'ACT', 'TAC'], dictionary, { rearrange: 'permute', move: true })
+  verify(['CAT', 'ACT', 'TAC'], dictionary, result, 2)
+  assert.equal(result.routes.length, 1)
+})
+
+test('timeout after a first goal preserves shortest routes and marks enumeration incomplete', () => {
+  const dictionary = new Set(['AAA', 'ABA', 'AAB', 'ABB', 'BBB'])
+  let partial
+  for (let budget = 1; budget < 1000; budget++) {
+    let tick = 0
+    const result = solveOrderedLadder(['AAA', 'ABB', 'BBB'], dictionary, {}, { maxMs: budget, now: () => tick++ })
+    if (result.routes.length === 1 && result.limited) { partial = result; break }
+  }
+  assert.ok(partial)
+  assert.equal(partial.complete, false)
+  assert.equal(partial.path.length, 4)
+  assert.match(partial.reason, /more shortest routes may exist/)
+  assert.equal(solveOrderedLadder(['AAA', 'ABB', 'BBB'], dictionary).routes.length, 2)
 })
 
 test('bundled word list supports the ordered example', () => {

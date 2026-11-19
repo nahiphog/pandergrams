@@ -4,7 +4,8 @@ export type LadderOptions = {
   move?: boolean
 }
 export type LadderMove = { description: string; positions: number[] }
-export type LadderResult = { path: string[] | null; moves: LadderMove[]; explored: number; limited?: boolean; reason?: string }
+export type LadderRoute = { path: string[]; moves: LadderMove[] }
+export type LadderResult = { path: string[] | null; moves: LadderMove[]; explored: number; limited?: boolean; reason?: string; routes?: LadderRoute[]; complete?: boolean }
 
 export type OrderedLimits = { maxStates?: number; maxMs?: number; now?: () => number }
 
@@ -21,19 +22,24 @@ export function solveOrderedLadder(waypoints: string[], dictionary: ReadonlySet<
   const started = now()
   const neighbors = createNeighbors(dictionary, options, waypoints[0].length, false)
   const waypointIndex = new Map(waypoints.map((word, index) => [word, index]))
-  type State = { word: string; parent: number; nextWaypoint: number; move: LadderMove | null }
-  const queue: State[] = [{ word: waypoints[0], parent: -1, nextWaypoint: 1, move: null }]
+  type State = { word: string; parent: number; nextWaypoint: number; move: LadderMove | null; depth: number }
+  const queue: State[] = [{ word: waypoints[0], parent: -1, nextWaypoint: 1, move: null, depth: 0 }]
+  const routes: LadderRoute[] = []
+  let optimalDepth = Infinity
   let explored = 0
-  const limited = (reason: string): LadderResult => ({ path: null, moves: [], explored, limited: true, reason })
+  const finish = (complete: boolean, reason?: string): LadderResult => ({ path: routes[0]?.path ?? null, moves: routes[0]?.moves ?? [], routes, explored, complete, limited: !complete, reason })
+  const limited = (kind: string) => finish(false, `${kind} limit reached. ${routes.length ? 'These routes are shortest, but more shortest routes may exist.' : 'No conclusion was reached.'} Increase the search limits and try again.`)
   for (let head = 0; head < queue.length; head++) {
-    if (now() - started >= maxMs) return limited('Time limit reached. No conclusion was reached; increase the search limits and try again.')
     const state = queue[head]
+    // Finish the entire predecessor layer of the first goal, retaining all ties.
+    if (state.depth >= optimalDepth) break
+    if (now() - started >= maxMs) return limited('Time')
     explored++
     const used = new Set<string>()
     for (let index = head; index !== -1; index = queue[index].parent) used.add(queue[index].word)
     const seen = new Set<string>()
     for (const [next, move] of neighbors(state.word)) {
-      if (now() - started >= maxMs) return limited('Time limit reached. No conclusion was reached; increase the search limits and try again.')
+      if (now() - started >= maxMs) return limited('Time')
       if (!next || !dictionary.has(next) || used.has(next) || seen.has(next)) continue
       seen.add(next)
       const requiredIndex = waypointIndex.get(next)
@@ -46,13 +52,16 @@ export function solveOrderedLadder(waypoints: string[], dictionary: ReadonlySet<
           path.push(queue[index].word)
           if (queue[index].move) moves.push(queue[index].move!)
         }
-        return { path: path.reverse(), moves: moves.reverse(), explored }
+        optimalDepth = state.depth + 1
+        routes.push({ path: path.reverse(), moves: moves.reverse() })
+        continue
       }
-      if (queue.length >= maxStates) return limited('State limit reached. No conclusion was reached; increase the search limits and try again.')
-      queue.push({ word: next, parent: head, nextWaypoint, move })
+      if (state.depth + 1 >= optimalDepth) continue
+      if (queue.length >= maxStates) return limited('State')
+      queue.push({ word: next, parent: head, nextWaypoint, move, depth: state.depth + 1 })
     }
   }
-  return { path: null, moves: [], explored }
+  return finish(true)
 }
 
 const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'

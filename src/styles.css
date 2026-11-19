@@ -106,6 +106,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .ladder-options select { width: 100%; padding: 10px; border: 1px solid #c5cfc8; border-radius: 8px; background: #fafbf7; color: #263b4c; }
 #ladder-rearrange { width: auto; max-width: 100%; }
 .ordered-words > label { display: block; font-weight: 600; margin-bottom: 8px; }
+.ordered-route-list { padding-left: 24px; overflow-wrap: anywhere; }
+.ordered-route-list > li { padding: 16px 0; border-bottom: 1px solid #c5cfc8; }
+.ordered-route-list > li > p { font-family: 'DM Mono', monospace; }
+.ordered-route-list summary { cursor: pointer; }
+.ordered-route-list details ol { padding-left: 24px; line-height: 1.7; }
 .ordered-words p { font-size: 14px; line-height: 1.5; }
 .ordered-words textarea { width: 100%; resize: vertical; padding: 12px; border: 1px solid #c5cfc8; border-radius: 8px; font: inherit; background: #fafbf7; color: #263b4c; }
 .ordered-words textarea:focus-visible { outline: 3px solid #d66350; outline-offset: 3px; }

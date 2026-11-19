@@ -14,6 +14,7 @@ function WordLadder() {
   const [retry, setRetry] = useState(0)
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<LadderResult | null>(null)
+  const [routePage, setRoutePage] = useState(0)
   const [exploration, setExploration] = useState<ExplorationResult | null>(null)
   const [mode, setMode] = useState<'target' | 'explore' | 'ordered'>('target')
   const [waypointInput, setWaypointInput] = useState('')
@@ -49,6 +50,7 @@ function WordLadder() {
   }
 
   function edit(next: string[]) {
+    setRoutePage(0)
     stop()
     setWords(next)
     setResult(null)
@@ -57,6 +59,7 @@ function WordLadder() {
   }
 
   function search() {
+    setRoutePage(0)
     setTouched([true, true])
     setWaypointsTouched(true)
     if (!lexicon || errors.some(Boolean) || lengthError || waypointError) return
@@ -143,7 +146,7 @@ function WordLadder() {
             <p>Moving a letter keeps all other letters in their relative order. Permutation allows any rearrangement of the same letters.</p>
           </fieldset>
           <div className="search-actions">
-            <button className="primary-button" type="submit" disabled={!lexicon || running}>{running ? 'Searching…' : mode === 'explore' ? 'Find all reachable words' : mode === 'ordered' ? 'Find shortest ordered route' : 'Find shortest ladder'}</button>
+            <button className="primary-button" type="submit" disabled={!lexicon || running}>{running ? 'Searching…' : mode === 'explore' ? 'Find all reachable words' : mode === 'ordered' ? 'Find all shortest ordered routes' : 'Find shortest ladder'}</button>
             <button type="button" onClick={() => { edit(['', '']); setTouched([false, false]); setWaypointInput(''); setWaypointsTouched(false) }}>Clear input</button>
             {running && <button type="button" onClick={() => { stop(); setNotice('Search cancelled. No conclusion was reached.') }}>Cancel</button>}
           </div>
@@ -157,7 +160,13 @@ function WordLadder() {
           <h2 id="ladder-results-heading">{running ? 'Finding your ladder…' : result?.path ? `Shortest ladder: ${result.path.length - 1} ${result.path.length === 2 ? 'step' : 'steps'}` : result?.limited ? 'Search limit reached' : result ? 'No ladder found' : 'Your shortest ladder'}</h2>
           {notice ? <p>{notice}</p> : running ? <p>Searching for a shortest complete route.</p> : result?.limited ? <p>{result.reason}</p> : result?.path ? <p>{mode === 'ordered' ? 'All requested words are visited in order. No word repeats anywhere in this shortest route.' : result.path.length === 1 ? 'The starting and ending words are identical. No changes needed.' : 'One shortest path under your selected rules is shown below. Each step describes the operation used.'}</p> : result ? <p>{mode === 'ordered' ? 'No route visits all requested words in order without repeating a word under the selected rules.' : 'No sequence of enabled moves connects these words in the bundled word list.'}</p> : <p>{mode === 'ordered' ? 'Enter three or more words in order, then find a route through them.' : 'Enter two words, choose your move rules, then find their shortest connection.'}</p>}
         </div>
-        {result?.path && <ol className="ladder-path" aria-label="Shortest word ladder">{result.path.map((word, index, path) => <li key={word}><span className="ladder-step">{index === 0 ? 'Start' : `Step ${index}`}</span><div className="ladder-transition"><span className="ladder-word">{[...word].map((letter, position) => index > 0 && result.moves[index - 1].positions.includes(position) ? <mark className="changed-letter" key={position}>{letter}</mark> : <span key={position}>{letter}</span>)}</span>{index > 0 && <p className="ladder-operation">{result.moves[index - 1].description}</p>}</div>{index === path.length - 1 && <span className="count-pill">Finish</span>}</li>)}</ol>}
+        {mode === 'ordered' && result?.routes && result.routes.length > 0 && <div>
+          <p>{result.complete ? `All ${result.routes.length.toLocaleString()} shortest routes found.` : `${result.routes.length.toLocaleString()} shortest routes found so far; more may exist.`} No word repeats within any route.</p>
+          <p>Showing routes {routePage * 10 + 1}–{Math.min((routePage + 1) * 10, result.routes.length)} of {result.routes.length.toLocaleString()}.</p>
+          <ol className="ordered-route-list" start={routePage * 10 + 1}>{result.routes.slice(routePage * 10, (routePage + 1) * 10).map(route => <li key={route.path.join(',')}><p>{route.path.join(' → ')}</p><details><summary>Step details</summary><ol>{route.moves.map((move, index) => <li key={index}>{route.path[index]} → {route.path[index + 1]}: {move.description}</li>)}</ol></details></li>)}</ol>
+          {result.routes.length > 10 && <div className="search-actions"><button disabled={routePage === 0} onClick={() => setRoutePage(routePage - 1)}>Previous routes</button><button disabled={(routePage + 1) * 10 >= result.routes!.length} onClick={() => setRoutePage(routePage + 1)}>Next routes</button></div>}
+        </div>}
+        {mode !== 'ordered' && result?.path && <ol className="ladder-path" aria-label="Shortest word ladder">{result.path.map((word, index, path) => <li key={word}><span className="ladder-step">{index === 0 ? 'Start' : `Step ${index}`}</span><div className="ladder-transition"><span className="ladder-word">{[...word].map((letter, position) => index > 0 && result.moves[index - 1].positions.includes(position) ? <mark className="changed-letter" key={position}>{letter}</mark> : <span key={position}>{letter}</span>)}</span>{index > 0 && <p className="ladder-operation">{result.moves[index - 1].description}</p>}</div>{index === path.length - 1 && <span className="count-pill">Finish</span>}</li>)}</ol>}
         {mode === 'ordered' && result?.path && <p>Requested order: {waypoints.join(' → ')}</p>}
         {result && <p className="search-stats">{result.explored.toLocaleString()} {mode === 'ordered' ? 'route states' : 'words'} explored · Exact breadth-first search</p>}
         </>}
