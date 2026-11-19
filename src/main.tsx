@@ -69,7 +69,7 @@ function App() {
     setVisibleSolutions(10)
     setResult(null)
     setNotice('')
-    setProgress({ depth: 0, explored: 0, discovered: 1, elapsedMs: 0 })
+    setProgress({ depth: 0, explored: 0, discovered: 0, elapsedMs: 0, phase: 'words' })
     setRunning(true)
     const id = searchId.current
     try {
@@ -151,7 +151,7 @@ function App() {
                 {timeLimitError && <p id="seconds-error" className="field-error">{timeLimitError}</p>}
               </div>
             </div>
-            <p id="limits-help" className="limit-note">Increase these limits to explore more optimal solutions. More states use more memory. Time includes collecting walkthroughs; the 10,000-walkthrough result limit still applies.</p>
+            <p id="limits-help" className="limit-note">Increase these limits to explore more optimal solutions. States count reachable words and coverage combinations. More states use more memory. Time includes collecting walkthroughs; the 10,000-walkthrough result limit still applies.</p>
             <button onClick={() => { edit(words); setStateLimitInput('250000'); setTimeLimitInput('30') }}>Restore default limits</button>
           </fieldset>
           <p className="limit-note">Editing words, exclusions, or limits cancels and clears the search.</p>
@@ -159,9 +159,9 @@ function App() {
       </section>
       <section className="results-panel" aria-labelledby="results-heading" aria-busy={running}>
         <p className="eyebrow">Shortest path</p>
-        <h2 id="results-heading">{running ? 'Exploring word banks…' : result?.status === 'solved' ? `Solved in ${result.moves.length} ${result.moves.length === 1 ? 'move' : 'moves'}` : result?.status === 'impossible' ? 'No solution' : result?.status === 'limited' ? 'Search limit reached' : 'Your solution'}</h2>
-        <div role="status">{notice && <p>{notice}</p>}{result && result.status !== 'solved' && <p>{result.reason}</p>}{result?.status === 'solved' && <p>Minimum guaranteed by A* search{excludedWords.length ? ' with these exclusions' : ''}. Final coverage: 26/26 letters.</p>}</div>
-        {progress && <p className="search-stats">Current path depth {progress.depth} · {progress.explored.toLocaleString()} explored · {progress.discovered.toLocaleString()} discovered · {(progress.elapsedMs / 1000).toFixed(1)}s</p>}
+        <h2 id="results-heading">{running ? (progress?.phase === 'combinations' ? 'Combining word coverage…' : progress?.phase === 'solutions' ? 'Collecting optimal walkthroughs…' : 'Exploring reachable words…') : result?.status === 'solved' ? `Solved in ${result.moves.length} ${result.moves.length === 1 ? 'move' : 'moves'}` : result?.status === 'impossible' ? 'No solution' : result?.status === 'limited' ? 'Search limit reached' : 'Your solution'}</h2>
+        <div role="status">{notice && <p>{notice}</p>}{result && result.status !== 'solved' && <p>{result.reason}</p>}{result?.status === 'solved' && <p>Minimum guaranteed by exact search{excludedWords.length ? ' with these exclusions' : ''}. Final coverage: 26/26 letters.</p>}</div>
+        {progress && <p className="search-stats">{progress.phase === 'words' ? 'Word search' : progress.phase === 'combinations' ? 'Coverage combinations' : 'Solution collection'} · {progress.explored.toLocaleString()} explored · {progress.discovered.toLocaleString()} discovered · {(progress.elapsedMs / 1000).toFixed(1)}s</p>}
         {!progress && <p>Edit the starting bank above and start a search to see each change.</p>}
         {result?.status === 'solved' && (
           <div>

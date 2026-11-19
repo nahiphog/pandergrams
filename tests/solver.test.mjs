@@ -23,8 +23,8 @@ function verify(start, dictionary, expectedMoves) {
 }
 
 test('already complete bank takes zero moves', () => verify(['ABC', filler], dict('ABC'), 0))
-test('A* returns minimum path and valid reconstruction', () => verify(['AAA', filler], dict('AAA', 'ABA', 'ABC', 'ADA', 'ADB', 'ABB'), 2))
-test('full bank tracking allows a word to occur in multiple surrounding banks', () => verify(['AAA', 'AAA', filler], dict('AAA', 'BAA', 'CAA'), 2))
+test('Factorized solver returns minimum path and valid reconstruction', () => verify(['AAA', filler], dict('AAA', 'ABA', 'ABC', 'ADA', 'ADB', 'ABB'), 2))
+test('independent rows preserve distinct assignments even for duplicate starting words', () => verify(['AAA', 'AAA', filler], dict('AAA', 'BAA', 'CAA'), 2))
 test('same-position detour loses to the direct substitution', () => {
   const support = 'BCDEFGHIJMNOPQRTUVWXYZ'
   const result = verify(['BLACK', support], new Set(['BLACK', 'PLACK', 'SLACK', support]), 1)
@@ -34,7 +34,7 @@ test('temporary coverage loss is allowed', () => verify(['AAA', filler], dict('A
 test('cycles terminate with an exhaustive no-solution result', () => {
   const result = solve(['AAA', filler], dict('AAA', 'ABA', 'ABB', 'AAB'))
   assert.equal(result.status, 'impossible')
-  assert.equal(result.discovered, 4)
+  assert.equal(result.discovered, 5) // Four reachable three-letter words plus the fixed support word.
 })
 test('fewer than 26 positions is impossible', () => assert.equal(solve(['AAA'], dict('AAA')).status, 'impossible'))
 test('invalid inputs fail validation', () => {
@@ -92,7 +92,7 @@ test('missing-letter heuristic counts distinct uncovered letters', () => {
   assert.equal(missingLetterCount(letterMask('AAAABC')), 23)
 })
 
-test('A* agrees with independent exhaustive BFS on 100 seeded word graphs', () => {
+test('Factorized solver agrees with independent exhaustive BFS on 100 seeded word graphs', () => {
   let seed = 74129
   const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 2 ** 32 }
   const candidates = []
@@ -216,5 +216,87 @@ test('invalid search limits cannot bypass resource checks', () => {
     for (const value of [0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
       assert.throws(() => solve(['AAA', filler], dict('AAA'), { [name]: value }), /Search limits/)
     }
+  }
+})
+
+test('all multi-row walkthroughs agree with exhaustive row-ordered paths', () => {
+  let seed = 773
+  const candidates = []
+  for (const a of 'ABC') for (const b of 'ABC') for (const c of 'ABC') candidates.push(a+b+c)
+  for (let sample = 0; sample < 30; sample++) {
+    const dictionary = dict('AAA', ...candidates.filter(() => { seed=(Math.imul(seed,1664525)+1013904223)>>>0; return seed/2**32 < .2 }))
+    const start=['AAA','AAA',filler], distance=bfsDistance(start,dictionary), result=solve(start,dictionary)
+    if(distance===null) { assert.equal(result.status,'impossible');continue }
+    assert.equal(result.complete,true)
+    const expected=new Set()
+    const visit=(bank,moves,minRow) => {
+      if(moves.length===distance) {
+        if(new Set(bank.join('')).size===26) expected.add(JSON.stringify(moves))
+        return
+      }
+      for(let row=minRow;row<2;row++) for(const candidate of dictionary) {
+        if(candidate.length!==bank[row].length || [...candidate].filter((c,i)=>c!==bank[row][i]).length!==1) continue
+        const next=[...bank];next[row]=candidate
+        visit(next,[...moves,[row,candidate]],row)
+      }
+    }
+    visit(start,[],0)
+    assert.deepEqual(new Set(result.solutions.map(s=>JSON.stringify(s.moves.map(m=>[m.row,m.to])))),expected)
+  }
+})
+test('equal coverage and distance retain different final words', () => {
+  const result=solve(['AAA',filler],dict('AAA','ABA','ABC','ACA','ACB'))
+  assert.equal(result.complete,true)
+  assert.deepEqual(new Set(result.solutions.map(s=>s.words[0])),new Set(['ABC','ACB']))
+})
+test('reachable-letter pruning proves an unavailable letter impossible', () => {
+  const result=solve(['AAA',filler],dict('AAA','ABA','ABB'))
+  assert.equal(result.status,'impossible')
+  assert.match(result.reason,/cannot be reached/)
+})
+test('coverage alone does not falsely prove feasibility', () => {
+  // All A/B/C occur somewhere, but this row only has two positions.
+  const support='DEFGHIJKLMNOPQRSTUVWXYZDDD'
+  const dictionary=new Set(['AA','AB','AC',support])
+  const result=solve(['AA',support],dictionary)
+  assert.equal(result.status,'impossible')
+  assert.match(result.reason,/No combination/)
+})
+test('no implicit eight-mutation constraint is introduced', () => {
+  const support='BCDEFGHIJKLMNOPQRSTUVWXYZ'
+  const path=['ZZZZZZZZZZ','BZZZZZZZZZ','BBZZZZZZZZ','BBBZZZZZZZ','BBBBZZZZZZ','BBBBBZZZZZ','BBBBBBZZZZ','BBBBBBBZZZ','BBBBBBBBZZ','BBBBBBBBBZ','BBBBBBBBBA']
+  const result=solve([path[0],support],new Set([...path,support]))
+  assert.equal(result.status,'solved')
+  assert.equal(result.moves.length,10)
+  assert.equal(result.complete,true)
+})
+
+test('collection timeout retains a proven optimum and reports missing alternatives', () => {
+  let clock=0
+  const result=solve(['AAA',filler],dict('AAA','ABA','AAC','ABC'),{
+    maxMs:100000,
+    now:()=>clock+=200,
+    onProgress:progress=>{ if(progress.phase==='solutions') clock=100000 }
+  })
+  assert.equal(result.status,'solved')
+  assert.equal(result.moves.length,2)
+  assert.equal(result.complete,false)
+  assert.match(result.reason,/Time limit/)
+})
+test('all returned alternative chains are valid and have minimum total cost', () => {
+  const dictionary=dict('AAA','ABA','AAC','ABC','ACA','ACB','BAA','CAA')
+  const start=['AAA','AAA',filler], expected=bfsDistance(start,dictionary)
+  const result=solve(start,dictionary)
+  for(const solution of result.solutions) {
+    const bank=[...start]
+    assert.equal(solution.moves.length,expected)
+    for(const move of solution.moves) {
+      assert.equal(move.from,bank[move.row])
+      assert.equal([...move.from].filter((c,i)=>c!==move.to[i]).length,1)
+      assert.ok(dictionary.has(move.to))
+      bank[move.row]=move.to
+    }
+    assert.deepEqual(bank,solution.words)
+    assert.equal(new Set(bank.join('')).size,26)
   }
 })

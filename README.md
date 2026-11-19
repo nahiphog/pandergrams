@@ -26,7 +26,7 @@ The optional **Excluded words** field accepts comma-separated words, ignoring
 case, surrounding spaces, duplicates, and empty entries. Excluded words cannot
 be mutation destinations, including final mutations; starting words remain
 allowed. Editing the list cancels and clears the current search. Clear the field
-to remove exclusions; the list is not persisted. A* still finds the fewest moves
+to remove exclusions; the list is not persisted. The solver still finds the fewest moves
 among solutions permitted by the exclusions.
 
 For a six-move example, enter these five words:
@@ -48,26 +48,45 @@ The production build includes both HTML pages for direct links on GitHub Pages.
 
 ## Pandergram search behavior
 
-`src/solver.ts` performs exact A* over ordered complete word banks. A binary
-min-heap prioritizes `f = g + h`, where `g` is the moves taken and `h` is the
-number of missing alphabet letters. Each substitution can introduce at most one
-missing letter, so this heuristic is admissible and consistent. Equal priorities
-favor fewer missing letters, with insertion order as the final tie-breaker.
+The solver separates the problem into independent word searches and an exact
+minimum-cost coverage search:
 
-The solver tracks the best move count for each entire bank, accepting a cheaper
-route even if that bank was already discovered. Superseded heap entries are
-skipped. A goal is accepted only when popped from the minimum-priority frontier,
-preserving the fewest-moves guarantee. A word can occur in many different bank
-states. Cached neighbors and letter masks speed up expansion; immutable parent
-links reconstruct the solution without changing earlier paths.
+1. Run BFS from each starting word, keeping every shortest predecessor edge.
+   Excluded words cannot be mutation destinations. Neighbor lists are cached;
+   duplicate starting rows share a graph within the search.
+2. Check whether the union of reachable letters can cover A–Z. If not, return
+   a proven impossible result immediately.
+3. Remove letters guaranteed by at least one row from the coverage calculation.
+   Group endpoints by the remaining letter mask, retaining the cheapest distance
+   and every tied endpoint. A more expensive endpoint with the same mask cannot
+   belong to a global optimum.
+4. Use dynamic programming over rows and coverage masks to minimize the sum of
+   word distances. Process smaller candidate groups first. Prune coverage that
+   remaining rows cannot complete, and costs above an established feasible bound.
+   Retain all equal-cost predecessor choices.
+5. Reconstruct all tied endpoint combinations and every shortest word chain,
+   restoring the original row order. Interleavings of independent row mutations
+   produce the same walkthrough and are shown once.
 
-Coverage is calculated from the current bank, not accumulated across moves.
-Moves that temporarily lose coverage remain eligible. No history-based letter
-restriction is necessary: same-position detours cannot improve a shortest path.
+This is exact because there are no cross-row constraints during mutation: any
+combination of independent valid chains can be performed in sequence. Coverage
+is required only in the final bank. There is no eight-mutation cap.
 
-`src/solver.worker.ts` runs A* off the UI thread. Request IDs prevent stale
-messages from replacing newer results. The UI validates words against the same
-dictionary passed to the worker.
+The worker reports three phases: reachable words, coverage combinations, and
+solution collection. States count unique word-graph nodes (shared duplicate
+roots counted once) plus coverage-mask nodes at each DP layer. Limits cover the
+whole search; a limit before the optimum is proven returns an incomplete search,
+not a claim of impossibility. After proof, collection limits preserve the first
+optimal walkthrough and explicitly mark the alternatives incomplete.
+
+Full word-graph exploration can be slower than the previous A* on easy puzzles,
+but avoids the product of intermediate word states. For the original example,
+a local comparison reduced discovered states from 149,668 to 29,781. With
+PROTECTING excluded from the six-move example, the new solver proves impossibility
+where the old solver hit its 250,000-state limit.
+
+The solver worker keeps the calculation off the UI thread. Request IDs reject
+stale responses, and termination supports cancellation.
 
 Search defaults to 250,000 discovered states or 30 seconds. Both limits can be
 selected in the Search limits dropdowns before running a search. State options
@@ -79,7 +98,7 @@ limits resets both settings; Clear input preserves the selected search limits.
 Larger state limits require more browser memory. The separate 10,000-walkthrough
 collection limit still applies. A reached limit is an
 incomplete search, never a proof of impossibility. The original five-word example
-has a minimum solution of nine moves; A* finds it within the state limit.
+has a minimum solution of nine moves, found within the default state limit.
 These limits can be adjusted through the solver options; memory still grows
 rapidly with the number of word-bank
 combinations. An already complete bank returns zero moves. Fewer than 26 total
@@ -90,7 +109,7 @@ only after exhaustive search.
 
 The Node test suite checks shortest paths, reconstruction, full-bank state
 tracking, temporary coverage loss, cycles, invalid inputs, resource limits,
-progress, and a real-dictionary solution. It also compares A* with an independent
+progress, and a real-dictionary solution. It also compares the solver with an independent
 exhaustive BFS oracle on 100 deterministic generated word graphs. `npm run build`
 checks TypeScript and bundles the application and worker.
 
@@ -105,8 +124,8 @@ development uses `/`. No additional deployment package or secret is needed.
 
 ## Multiple optimal walkthroughs
 
-A* retains equal-cost predecessor edges and continues through every state whose
-estimated total cost is at most the optimum. The results include distinct
+BFS and coverage DP retain every equal-cost predecessor needed to reconstruct
+all minimum solutions. The results include distinct
 per-word mutation chains in starting row order. Interleavings of independent row
 mutations are shown once. Results are displayed ten at a time with Show more.
 The UI explicitly labels incomplete results if the state/time limit or the
