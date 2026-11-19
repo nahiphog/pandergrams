@@ -41,7 +41,7 @@ button { cursor: pointer; border: 1px solid #ccd4cd; border-radius: 9px; padding
 button:hover:not(:disabled) { background: #e9eddf; }
 button:disabled { opacity: .55; cursor: not-allowed; }
 button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid #d66350; outline-offset: 3px; }
-.editable-word { display: grid; grid-template-columns: 26px minmax(0, 1fr) 38px; gap: 8px; align-items: center; }
+.editable-word { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 8px; align-items: center; }
 .editable-word input { min-width: 0; width: 100%; padding: 11px; border: 1px solid #c5cfc8; border-radius: 9px; background: #fafbf7; color: #263b4c; font-family: 'DM Mono', monospace; }
 .editable-word input[aria-invalid="true"] { border-color: #b04430; }
 .exclusions-field { margin-top: 24px; }
@@ -59,7 +59,6 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid 
 .limit-fields .field-error { margin-top: 8px; }
 .search-limits button { margin-top: 12px; font-size: 12px; }
 @media (max-width: 390px) { .limit-fields { grid-template-columns: 1fr; } }
-.remove-word { padding: 6px; font-size: 22px; }
 .field-error { color: #a23324; font-size: 12px; margin: 0; grid-column: 2 / -1; }
 .edit-actions, .search-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
 .primary-button { background: #1e3144; border-color: #1e3144; color: #fff; }

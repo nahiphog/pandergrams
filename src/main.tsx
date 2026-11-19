@@ -120,7 +120,6 @@ function App() {
               <div className="editable-word" key={index}>
                 <label htmlFor={`word-${index}`} className="word-index">{String(index + 1).padStart(2, '0')}</label>
                 <input id={`word-${index}`} aria-label={`Starting word ${index + 1}`} value={word} spellCheck={false} autoComplete="off" aria-invalid={!!errors[index]} aria-describedby={errors[index] ? `error-${index}` : undefined} onChange={(event) => edit(words.map((value, row) => row === index ? event.target.value.trim().toUpperCase() : value))} />
-                <button className="remove-word" aria-label={`Remove word ${index + 1}`} onClick={() => edit(words.filter((_, row) => row !== index))}>×</button>
                 {errors[index] && <p id={`error-${index}`} className="field-error">{errors[index]}</p>}
               </div>
             ))}
