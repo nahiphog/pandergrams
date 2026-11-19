@@ -1,7 +1,15 @@
 export type LadderOptions = {
+  minWordLength?: number
   addDelete?: boolean
   rearrange?: 'off' | 'swap' | 'permute'
   move?: boolean
+}
+
+function constrainDictionary(dictionary: ReadonlySet<string>, options: LadderOptions, requiredWords: string[]): ReadonlySet<string> {
+  const minimum = options.minWordLength ?? 1
+  if (!Number.isSafeInteger(minimum) || minimum < 1) throw new Error('Minimum word length must be a positive whole number.')
+  if (requiredWords.some(word => word.length < minimum)) throw new Error(`All words must contain at least ${minimum} letters.`)
+  return minimum === 1 ? dictionary : new Set([...dictionary].filter(word => word.length >= minimum))
 }
 export type LadderMove = { description: string; positions: number[] }
 export type LadderRoute = { path: string[]; moves: LadderMove[] }
@@ -11,6 +19,7 @@ export type OrderedLimits = { maxStates?: number; maxMs?: number; now?: () => nu
 
 /** Search whole simple paths: the used words are part of the state, never just the current word. */
 export function solveOrderedLadder(waypoints: string[], dictionary: ReadonlySet<string>, options: LadderOptions = {}, limits: OrderedLimits = {}): LadderResult {
+  dictionary = constrainDictionary(dictionary, options, waypoints)
   if (waypoints.length < 3) throw new Error('Enter at least three words in visit order.')
   if (waypoints.some(word => !/^[A-Z]+$/.test(word) || !dictionary.has(word))) throw new Error('Every requested word must be in the dictionary.')
   if (new Set(waypoints).size !== waypoints.length) throw new Error('Requested words must be distinct: the route cannot repeat a word.')
@@ -77,6 +86,7 @@ export type ExplorationResult = {
 
 /** Retain every equal-distance predecessor, compactly representing ALL shortest paths. */
 export function exploreLadder(start: string, dictionary: ReadonlySet<string>, options: LadderOptions = {}, maxSteps = 5): ExplorationResult {
+  dictionary = constrainDictionary(dictionary, options, [start])
   if (!/^[A-Z]+$/.test(start) || !dictionary.has(start)) throw new Error('Enter a starting word in the dictionary.')
   if (!Number.isInteger(maxSteps) || maxSteps < 1 || maxSteps > 5) throw new Error('Choose a step limit from 1 to 5.')
   const neighbors = createNeighbors(dictionary, options, start.length, false)
@@ -134,6 +144,7 @@ export function explorationPaths(result: ExplorationResult, word: string, offset
 
 /** Every enabled operation costs one step; FIFO BFS guarantees a shortest path. */
 export function solveLadder(start: string, end: string, dictionary: ReadonlySet<string>, options: LadderOptions = {}): LadderResult {
+  dictionary = constrainDictionary(dictionary, options, [start, end])
   for (const word of [start, end]) {
     if (!/^[A-Z]+$/.test(word) || !dictionary.has(word)) {
       throw new Error('Both words must contain only A–Z and appear in the dictionary.')

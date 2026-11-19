@@ -25,11 +25,11 @@ function WordLadder() {
   const waypoints = waypointInput.trim().toUpperCase().split(/[\s,]+/).filter(Boolean)
   const [maxSteps, setMaxSteps] = useState(5)
   const [notice, setNotice] = useState('')
-  const [options, setOptions] = useState<LadderOptions>({ addDelete: false, rearrange: 'off', move: false })
-  const waypointError = mode !== 'ordered' ? '' : waypoints.length < 3 ? 'Enter at least three words.' : new Set(waypoints).size !== waypoints.length ? 'Use distinct words; the entire route must have no repeats.' : waypoints.some(word => !/^[A-Z]+$/.test(word)) ? 'Use letters A–Z, separating words with spaces, commas, or new lines.' : lexicon && waypoints.some(word => !lexicon.has(word)) ? `Not in the dictionary: ${waypoints.filter(word => !lexicon.has(word)).join(', ')}` : !options.addDelete && waypoints.some(word => word.length !== waypoints[0].length) ? 'Use words of the same length, or enable adding/deleting a letter.' : ''
+  const [options, setOptions] = useState<LadderOptions>({ addDelete: false, rearrange: 'off', move: false, minWordLength: 3 })
+  const waypointError = mode !== 'ordered' ? '' : waypoints.some(word => word.length < (options.minWordLength ?? 1)) ? 'Every requested word must have at least 3 letters, or disable the minimum word length option.' : waypoints.length < 3 ? 'Enter at least three words.' : new Set(waypoints).size !== waypoints.length ? 'Use distinct words; the entire route must have no repeats.' : waypoints.some(word => !/^[A-Z]+$/.test(word)) ? 'Use letters A–Z, separating words with spaces, commas, or new lines.' : lexicon && waypoints.some(word => !lexicon.has(word)) ? `Not in the dictionary: ${waypoints.filter(word => !lexicon.has(word)).join(', ')}` : !options.addDelete && waypoints.some(word => word.length !== waypoints[0].length) ? 'Use words of the same length, or enable adding/deleting a letter.' : ''
   const worker = useRef<Worker | null>(null)
   const activeWords = mode === 'ordered' ? [] : mode === 'explore' ? words.slice(0, 1) : words
-  const errors = activeWords.map(word => !word ? 'Enter a word.' : !/^[A-Z]+$/.test(word) ? 'Use letters A–Z only.' : lexicon && !lexicon.has(word) ? 'Not in the dictionary.' : '')
+  const errors = activeWords.map(word => !word ? 'Enter a word.' : word.length < (options.minWordLength ?? 1) ? 'Use at least 3 letters, or disable the minimum word length option.' : !/^[A-Z]+$/.test(word) ? 'Use letters A–Z only.' : lexicon && !lexicon.has(word) ? 'Not in the dictionary.' : '')
   const lengthError = mode === 'target' && !options.addDelete && words.every(Boolean) && words[0].length !== words[1].length ? 'Use words of the same length, or enable adding/deleting a letter.' : ''
 
   useEffect(() => {
@@ -96,7 +96,7 @@ function WordLadder() {
     <main className="page-shell ladder-page">
       <nav className="topbar" aria-label="Primary navigation">
         <a className="brand" href={import.meta.env.BASE_URL}><img className="brand-mark" src={`${import.meta.env.BASE_URL}word-ladder-icon.svg`} width="44" height="44" alt="" /><span>Word ladder <em>solver</em></span></a>
-        <div className="page-links"><a href={import.meta.env.BASE_URL}>Pandergrams</a><a href={`${import.meta.env.BASE_URL}word-ladder.html`} aria-current="page">Word ladder</a></div>
+        <div className="page-links"><a href={`${import.meta.env.BASE_URL}pandergrams.html`}>Pandergrams</a><a href={import.meta.env.BASE_URL} aria-current="page">Word ladder</a></div>
       </nav>
       <section className="workspace word-panel" aria-labelledby="ladder-heading">
         <p className="eyebrow">One step at a time</p>
@@ -133,6 +133,11 @@ function WordLadder() {
             ))}
           </div>
           <p id="ladder-length-error" className="field-error">{lengthError}</p>
+          <fieldset className="ladder-options">
+            <legend>Word length</legend>
+            <label className="ladder-toggle"><input type="checkbox" checked={options.minWordLength === 3} onChange={event => { edit(words); setOptions({ ...options, minWordLength: event.target.checked ? 3 : 1 }) }} /> Require at least 3 letters in every word</label>
+            <p>Enabled by default. Applies to starting words, ending words, requested waypoints, and every intermediate word in all search modes. Disable to allow shorter words.</p>
+          </fieldset>
           <fieldset className="ladder-options">
             <legend>Optional moves</legend>
             <p id="ladder-options-help">All off by default. Each enabled operation counts as one step. Changing a rule cancels and clears the current search.</p>

@@ -134,7 +134,7 @@ function App() {
     <main className="page-shell" id="top">
       <nav className="topbar" aria-label="Primary navigation">
         <a className="brand" href="#top"><img className="brand-mark" src={`${import.meta.env.BASE_URL}word-ladder-icon.svg`} width="44" height="44" alt="" /><span>Word ladder <em>solver</em></span></a>
-        <div className="page-links"><a href={import.meta.env.BASE_URL} aria-current="page">Pandergrams</a><a href={`${import.meta.env.BASE_URL}word-ladder.html`}>Word ladder</a></div>
+        <div className="page-links"><a href={`${import.meta.env.BASE_URL}pandergrams.html`} aria-current="page">Pandergrams</a><a href={import.meta.env.BASE_URL}>Word ladder</a></div>
       </nav>
       <section className="workspace" aria-label="Puzzle workspace">
         <div className="word-panel">

@@ -34,6 +34,16 @@ For a six-move example, enter these five words:
 
 ## Word ladder page
 
+Word Ladder is the default page at the site root. The existing `word-ladder.html`
+URL remains available, and Pandergrams is accessible at `pandergrams.html` and
+through the navigation links.
+
+**Require at least 3 letters in every word** is enabled by default in all ladder
+modes. It applies to inputs, requested waypoints, and every intermediate word,
+including when adding/deleting letters is enabled. Uncheck it to allow shorter
+dictionary words. Changing it cancels and clears the current search. This filter
+does not affect the Pandergram solver's dictionary.
+
 Open **Word ladder** in the navigation (or `word-ladder.html`) to connect a
 starting word to an ending word using the same bundled Norvig dictionary.
 Both words must be in the list. Replacing exactly one letter is always allowed.
