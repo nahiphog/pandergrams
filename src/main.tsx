@@ -101,16 +101,11 @@ function App() {
   }
 
   return (
-    <main className="page-shell">
+    <main className="page-shell" id="top">
       <nav className="topbar" aria-label="Primary navigation">
         <a className="brand" href="#top"><span className="brand-mark">P</span><span>Pandergram <em>Solver</em></span></a>
         <span className="draft-chip"><span className="chip-dot" /> Exact A*</span>
       </nav>
-      <section className="hero" id="top">
-        <p className="eyebrow">Letter transformation puzzle</p>
-        <h1>Make every letter <span>count.</span></h1>
-        <p className="intro">Change one letter at a time. Build a word set that covers the entire alphabet in as few moves as possible.</p>
-      </section>
       <section className="workspace" aria-label="Puzzle workspace">
         <div className="word-panel">
           <div className="panel-heading"><div><p className="eyebrow">Starting point</p><h2>Starting word bank</h2></div><span className="count-pill">{words.length} words</span></div>
@@ -126,6 +121,7 @@ function App() {
               </div>
             ))}
           </div>
+          <p className="missing-summary" aria-live="polite"><strong>Missing letters:</strong> {missingLetters.length ? missingLetters.join(' · ') : 'None — all 26 letters covered'}</p>
           <div className="search-actions">
             <button className="primary-button" disabled={!canSolve || running} onClick={search}>{running ? 'Searching…' : 'Find minimum changes'}</button>
             <button onClick={() => { edit([...initialWords]); setEditedWords(initialWords.map(() => false)); setExcludedInput('') }}>Clear input</button>
@@ -142,12 +138,16 @@ function App() {
             <div className="limit-fields">
               <div>
                 <label htmlFor="max-states">Maximum states</label>
-                <input id="max-states" type="number" min="1" step="1" value={stateLimitInput} aria-invalid={!!stateLimitError} aria-describedby={stateLimitError ? 'states-error' : 'limits-help'} onChange={(event) => { edit(words); setStateLimitInput(event.target.value) }} />
+                <select id="max-states" value={stateLimitInput} aria-describedby="limits-help" onChange={(event) => { edit(words); setStateLimitInput(event.target.value) }}>
+                  {[50000, 100000, 250000, 500000, 1000000, 2000000].map(limit => <option key={limit} value={limit}>{limit.toLocaleString()}{limit === 250000 ? ' (default)' : ''}</option>)}
+                </select>
                 {stateLimitError && <p id="states-error" className="field-error">{stateLimitError}</p>}
               </div>
               <div>
-                <label htmlFor="max-seconds">Search time (seconds)</label>
-                <input id="max-seconds" type="number" min="1" step="1" value={timeLimitInput} aria-invalid={!!timeLimitError} aria-describedby={timeLimitError ? 'seconds-error' : 'limits-help'} onChange={(event) => { edit(words); setTimeLimitInput(event.target.value) }} />
+                <label htmlFor="max-seconds">Search time</label>
+                <select id="max-seconds" value={timeLimitInput} aria-describedby="limits-help" onChange={(event) => { edit(words); setTimeLimitInput(event.target.value) }}>
+                  {[10, 30, 60, 120, 300, 600].map(seconds => <option key={seconds} value={seconds}>{seconds < 60 ? `${seconds} seconds` : `${seconds / 60} ${seconds === 60 ? 'minute' : 'minutes'}`}{seconds === 30 ? ' (default)' : ''}</option>)}
+                </select>
                 {timeLimitError && <p id="seconds-error" className="field-error">{timeLimitError}</p>}
               </div>
             </div>
@@ -156,13 +156,6 @@ function App() {
           </fieldset>
           <p className="limit-note">Editing words, exclusions, or limits cancels and clears the search.</p>
         </div>
-        <aside className="coverage-panel" aria-labelledby="coverage-heading">
-          <div className="panel-heading"><div><p className="eyebrow">Starting coverage</p><h2 id="coverage-heading">Alphabet check</h2></div><strong className="coverage-score">{usedLetters.size}<span>/26</span></strong></div>
-          <div className="progress-track" aria-label={`${usedLetters.size} of 26 letters covered`}><span style={{ width: `${usedLetters.size / 26 * 100}%` }} /></div>
-          <div className="alphabet-grid" aria-label="Alphabet letter coverage">{alphabet.map((letter) => <span className={usedLetters.has(letter) ? 'letter used' : 'letter missing'} key={letter} aria-label={`${letter}: ${usedLetters.has(letter) ? 'covered' : 'missing'}`}>{letter}</span>)}</div>
-          <div className="missing-callout"><span className="missing-icon">{missingLetters.length ? '!' : '✓'}</span><div><p>{missingLetters.length ? 'Still needed' : 'All covered'}</p><strong>{missingLetters.join(' · ') || 'A–Z complete'}</strong></div></div>
-          <p className="coverage-help">All 26 letters must be present together in the final word bank. Letters may disappear during intermediate moves.</p>
-        </aside>
       </section>
       <section className="results-panel" aria-labelledby="results-heading" aria-busy={running}>
         <p className="eyebrow">Shortest path</p>

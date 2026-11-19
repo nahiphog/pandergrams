@@ -56,8 +56,10 @@ messages from replacing newer results. The UI validates words against the same
 dictionary passed to the worker.
 
 Search defaults to 250,000 discovered states or 30 seconds. Both limits can be
-changed in the Search limits controls before running a search. Enter positive
-whole numbers; time is specified in seconds and includes collecting optimal
+selected in the Search limits dropdowns before running a search. State options
+are 50,000, 100,000, 250,000, 500,000, 1,000,000, and 2,000,000. Time options
+are 10 seconds, 30 seconds, 1 minute, 2 minutes, 5 minutes, and 10 minutes.
+The time budget includes collecting optimal
 walkthroughs. Editing limits cancels and clears an active search. Restore default
 limits resets both settings; Clear input preserves the selected search limits.
 Larger state limits require more browser memory. The separate 10,000-walkthrough
