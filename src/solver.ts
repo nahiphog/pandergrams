@@ -26,6 +26,7 @@ export interface SearchOptions {
   now?: () => number
 }
 interface WordNode { word: string; mask: number; distance: number; parents: { index: number; position: number }[] }
+export interface WordCacheSnapshot { version: 1; entries: [string, WordNode[]][] }
 
 /** Bounded LRU of complete BFS graphs, scoped to exact dictionary contents. */
 export class WordSearchCache {
@@ -48,6 +49,53 @@ export class WordSearchCache {
     this.dictionary = new Set(dictionary)
     this.entries.clear()
     this.units = 0
+  }
+
+  snapshot(): WordCacheSnapshot {
+    return { version: 1, entries: [...this.entries].map(([key, entry]) => [key, entry.graph]) }
+  }
+
+  restore(dictionary: Set<string>, snapshot: unknown): number {
+    this.bind(dictionary)
+    if (!snapshot || typeof snapshot !== 'object') return 0
+    const data = snapshot as Partial<WordCacheSnapshot>
+    if (data.version !== 1 || !Array.isArray(data.entries)) return 0
+    let restored = 0
+    // Stored data is optional: reject damaged entries instead of risking results.
+    for (const entry of data.entries.slice(-this.maxEntries)) {
+      try {
+        if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string') continue
+        const [key, graph] = entry
+        const parsed: unknown = JSON.parse(key)
+        if (!Array.isArray(parsed) || parsed.length !== 2 || typeof parsed[0] !== 'string' || typeof parsed[1] !== 'string') continue
+        const [root, exclusionKey] = parsed
+        const exclusions: unknown = JSON.parse(exclusionKey)
+        if (!Array.isArray(exclusions) || !exclusions.every(word => typeof word === 'string' && word && word === word.trim().toUpperCase())) continue
+        if (JSON.stringify([...new Set(exclusions)].sort()) !== exclusionKey) continue
+        const excluded = new Set(exclusions)
+        if (!Array.isArray(graph) || !graph.length || graph.length > this.maxUnits) continue
+        const seen = new Set<string>()
+        let units = graph.length
+        const valid = graph.every((node, index) => {
+          if (!node || typeof node !== 'object' || typeof node.word !== 'string' || !/^[A-Z]+$/.test(node.word) || !dictionary.has(node.word) || node.word.length !== root.length || seen.has(node.word)) return false
+          seen.add(node.word)
+          if (node.mask !== letterMask(node.word) || !Number.isSafeInteger(node.distance) || node.distance < 0 || !Array.isArray(node.parents)) return false
+          units += node.parents.length
+          if (units > this.maxUnits) return false
+          if (!index) return node.word === root && node.distance === 0 && node.parents.length === 0
+          if (excluded.has(node.word) || !node.parents.length || node.distance < graph[index - 1].distance) return false
+          const parents = new Set<number>()
+          return node.parents.every(edge => {
+            if (!edge || !Number.isSafeInteger(edge.index) || edge.index < 0 || edge.index >= index || parents.has(edge.index) || !Number.isSafeInteger(edge.position) || edge.position < 0 || edge.position >= root.length) return false
+            parents.add(edge.index)
+            const previous = graph[edge.index]
+            return previous.distance + 1 === node.distance && previous.word[edge.position] !== node.word[edge.position] && previous.word.slice(0, edge.position) === node.word.slice(0, edge.position) && previous.word.slice(edge.position + 1) === node.word.slice(edge.position + 1)
+          })
+        })
+        if (valid) { this.put(key, graph); restored++ }
+      } catch { /* Ignore malformed optional cache data. */ }
+    }
+    return restored
   }
 
   get(key: string): WordNode[] | undefined {

@@ -145,7 +145,8 @@ word boxes and exclusions, cancels any running search, and clears all results.
 
 ## Per-word search cache
 
-Completed pandergram word searches stay in the page's idle worker for reuse.
+Completed pandergram word searches stay in the page's idle worker and are saved
+to IndexedDB in this browser for reuse after refreshing or reopening the site.
 The key includes the starting word and normalized, sorted exclusions; dictionary
 content changes invalidate the cache. Reordering rows or changing search limits
 can reuse the same graphs. Only fully explored word graphs are cached, including
@@ -156,6 +157,17 @@ predecessor edges. Larger graphs are not retained. Cached nodes still count
 toward the selected state limit. Statistics show how many cached word searches
 were reused; the coverage combination search and walkthrough collection run anew.
 
+Completed snapshots are committed before a search is reported finished. On the
+first search after reopening, the worker restores the saved graphs. A format
+version, dictionary SHA-256 fingerprint, payload checksum, and graph validation
+prevent stale or damaged entries from affecting results. Saved snapshots are
+bounded to 16 MiB, retaining the most recent graphs. This is local browser
+storage; no cached searches are uploaded. Browser eviction or clearing site data
+can remove the cache.
+
 Editing or clearing inputs after a completed search keeps the cache. Cancelling
-or editing during an active search terminates the worker immediately and discards
-its cache. Reloading or leaving the page also clears it; nothing is saved to disk.
+or editing during an active search terminates the worker immediately; searches
+saved by earlier runs remain available. Work not yet committed may be lost.
+Denied, blocked, or full storage falls back to the in-memory cache and displays
+a notice. Dictionary/graph restoration and disk writes occur outside the solver
+time budget. Inputs and exclusions still start empty after a refresh.

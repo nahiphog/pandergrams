@@ -22,6 +22,7 @@ function App() {
   const [result, setResult] = useState<Result | null>(null)
   const [visibleSolutions, setVisibleSolutions] = useState(10)
   const [notice, setNotice] = useState('')
+  const [cacheNotice, setCacheNotice] = useState('Completed word searches are saved in this browser for reuse after refresh.')
   const worker = useRef<Worker | null>(null)
   const workerBusy = useRef(false)
   const workerDictionary = useRef<Set<string> | null>(null)
@@ -52,11 +53,12 @@ function App() {
   function stop() {
     searchId.current++
     // Retain an idle worker and its cache. Synchronous searches are cancelled by
-    // terminating a busy worker; the next search starts with a fresh cache.
+    // terminating a busy worker; the next search restores the last saved cache.
     if (workerBusy.current) {
       worker.current?.terminate()
       worker.current = null
       workerDictionary.current = null
+      setCacheNotice('Any previously saved word searches will be restored on the next search.')
     }
     workerBusy.current = false
     setRunning(false)
@@ -88,6 +90,7 @@ function App() {
         const message = event.data
         if (message.id !== searchId.current) return
         if (message.type === 'progress') setProgress(message.progress)
+        else if (message.type === 'cache-status') setCacheNotice(message.message)
         else {
           if (message.type === 'result') {
             setResult(message.result)
@@ -167,6 +170,7 @@ function App() {
             <button onClick={() => { edit(words); setStateLimitInput('250000'); setTimeLimitInput('30') }}>Restore default limits</button>
           </fieldset>
           <p className="limit-note">Editing words, exclusions, or limits cancels and clears the search.</p>
+          <p className="limit-note" role="status">{cacheNotice}</p>
         </div>
       </section>
       <section className="results-panel" aria-labelledby="results-heading" aria-busy={running}>
