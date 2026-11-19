@@ -10,6 +10,7 @@ const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 
 function App() {
   const [words, setWords] = useState(initialWords)
+  const [editedWords, setEditedWords] = useState(initialWords.map(() => false))
   const [excludedInput, setExcludedInput] = useState('')
   const [stateLimitInput, setStateLimitInput] = useState('250000')
   const [timeLimitInput, setTimeLimitInput] = useState('30')
@@ -26,6 +27,7 @@ function App() {
   const usedLetters = new Set(words.join('').replace(/[^A-Z]/g, ''))
   const missingLetters = alphabet.filter((letter) => !usedLetters.has(letter))
   const errors = words.map((word) => !word ? 'Enter a word.' : !/^[A-Z]+$/.test(word) ? 'Use letters A–Z only.' : lexicon && !lexicon.has(word) ? 'Not in the dictionary.' : '')
+  const visibleErrors = errors.map((error, index) => editedWords[index] ? error : '')
   const excludedWords = excludedInput.split(',').map((word) => word.trim().toUpperCase()).filter(Boolean)
   const exclusionError = excludedWords.some((word) => !/^[A-Z]+$/.test(word)) ? 'Use words containing A–Z only, separated by commas.' : ''
   const maxStates = Number(stateLimitInput)
@@ -119,14 +121,14 @@ function App() {
             {words.map((word, index) => (
               <div className="editable-word" key={index}>
                 <label htmlFor={`word-${index}`} className="word-index">{String(index + 1).padStart(2, '0')}</label>
-                <input id={`word-${index}`} aria-label={`Starting word ${index + 1}`} value={word} spellCheck={false} autoComplete="off" aria-invalid={!!errors[index]} aria-describedby={errors[index] ? `error-${index}` : undefined} onChange={(event) => edit(words.map((value, row) => row === index ? event.target.value.trim().toUpperCase() : value))} />
-                {errors[index] && <p id={`error-${index}`} className="field-error">{errors[index]}</p>}
+                <input id={`word-${index}`} aria-label={`Starting word ${index + 1}`} value={word} spellCheck={false} autoComplete="off" aria-invalid={!!visibleErrors[index]} aria-describedby={visibleErrors[index] ? `error-${index}` : undefined} onChange={(event) => { setEditedWords(editedWords.map((edited, row) => row === index ? true : edited)); edit(words.map((value, row) => row === index ? event.target.value.trim().toUpperCase() : value)) }} />
+                {visibleErrors[index] && <p id={`error-${index}`} className="field-error">{visibleErrors[index]}</p>}
               </div>
             ))}
           </div>
           <div className="search-actions">
             <button className="primary-button" disabled={!canSolve || running} onClick={search}>{running ? 'Searching…' : 'Find minimum changes'}</button>
-            <button onClick={() => { edit([...initialWords]); setExcludedInput('') }}>Clear input</button>
+            <button onClick={() => { edit([...initialWords]); setEditedWords(initialWords.map(() => false)); setExcludedInput('') }}>Clear input</button>
             {running && <button onClick={() => { stop(); setNotice('Search cancelled. No conclusion was reached.') }}>Cancel</button>}
           </div>
           <div className="exclusions-field">
