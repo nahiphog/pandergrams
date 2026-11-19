@@ -43,7 +43,7 @@ export async function decodeCache(fingerprint: string, stored: unknown): Promise
 }
 
 /** Atomic single-record read/write; denied, blocked, or full storage is optional. */
-async function access(write?: StoredCache): Promise<{ ok: boolean; value?: unknown }> {
+async function access(write?: StoredCache, remove = false): Promise<{ ok: boolean; value?: unknown }> {
   return new Promise(resolve => {
     let database: IDBDatabase | undefined
     let transaction: IDBTransaction | undefined
@@ -73,9 +73,9 @@ async function access(write?: StoredCache): Promise<{ ok: boolean; value?: unkno
         if (done) { database.close(); return }
         database.onversionchange = () => database?.close()
         try {
-          transaction = database.transaction(STORE, write ? 'readwrite' : 'readonly')
+          transaction = database.transaction(STORE, write || remove ? 'readwrite' : 'readonly')
           const store = transaction.objectStore(STORE)
-          const operation = write ? store.put(write, KEY) : store.get(KEY)
+          const operation = remove ? store.delete(KEY) : write ? store.put(write, KEY) : store.get(KEY)
           operation.onsuccess = () => { value = operation.result }
           transaction.oncomplete = () => finish(true)
           transaction.onerror = () => finish(false)
@@ -98,4 +98,9 @@ export async function saveWordCache(fingerprint: string | null, snapshot: WordCa
   if (!fingerprint) return false
   try { return (await access(await encodeCache(fingerprint, snapshot))).ok }
   catch { return false }
+}
+
+/** Remove only saved solver graphs, leaving other site data untouched. */
+export async function clearWordCache(): Promise<boolean> {
+  return (await access(undefined, true)).ok
 }

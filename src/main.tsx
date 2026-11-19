@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { dictionary, loadDictionary } from './dictionary'
 import type { Progress, Result } from './solver'
 import type { SearchRequest, SearchResponse } from './solver.worker'
+import { clearWordCache } from './cache-storage'
 import './styles.css'
 
 const initialWords = ['', '', '', '', '']
@@ -17,6 +18,7 @@ function App() {
   const [lexicon, setLexicon] = useState<Set<string> | null>(null)
   const [dictionaryError, setDictionaryError] = useState('')
   const [retry, setRetry] = useState(0)
+  const [clearingCache, setClearingCache] = useState(false)
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState<Progress | null>(null)
   const [result, setResult] = useState<Result | null>(null)
@@ -73,8 +75,21 @@ function App() {
     setNotice('')
   }
 
+  async function clearCache() {
+    if (running || clearingCache) return
+    setClearingCache(true)
+    // Drop the idle worker so its in-memory graphs cannot restore the saved cache.
+    worker.current?.terminate()
+    worker.current = null
+    workerDictionary.current = null
+    setCacheNotice('Clearing saved word searches…')
+    const cleared = await clearWordCache()
+    setCacheNotice(cleared ? 'Search cache cleared. New searches will be saved automatically.' : 'In-memory cache cleared, but saved searches could not be removed. Please try again.')
+    setClearingCache(false)
+  }
+
   function search() {
-    if (!canSolve || !lexicon) return
+    if (!canSolve || !lexicon || clearingCache) return
     stop()
     setVisibleSolutions(10)
     setResult(null)
@@ -131,14 +146,14 @@ function App() {
             {words.map((word, index) => (
               <div className="editable-word" key={index}>
                 <label htmlFor={`word-${index}`} className="word-index">{String(index + 1).padStart(2, '0')}</label>
-                <input id={`word-${index}`} aria-label={`Starting word ${index + 1}`} value={word} spellCheck={false} autoComplete="off" aria-invalid={!!visibleErrors[index]} aria-describedby={visibleErrors[index] ? `error-${index}` : undefined} onChange={(event) => { setEditedWords(editedWords.map((edited, row) => row === index ? true : edited)); edit(words.map((value, row) => row === index ? event.target.value.trim().toUpperCase() : value)) }} />
+                <input id={`word-${index}`} aria-label={`Starting word ${index + 1}`} value={word} maxLength={12} size={12} style={{ width: 'min(100%, calc(12ch + 24px))' }} spellCheck={false} autoComplete="off" aria-invalid={!!visibleErrors[index]} aria-describedby={visibleErrors[index] ? `error-${index}` : undefined} onChange={(event) => { setEditedWords(editedWords.map((edited, row) => row === index ? true : edited)); edit(words.map((value, row) => row === index ? event.target.value.trim().toUpperCase().slice(0, 12) : value)) }} />
                 {visibleErrors[index] && <p id={`error-${index}`} className="field-error">{visibleErrors[index]}</p>}
               </div>
             ))}
           </div>
           <p className="missing-summary" aria-live="polite"><strong>Missing letters:</strong> {missingLetters.length ? missingLetters.join(' · ') : 'None — all 26 letters covered'}</p>
           <div className="search-actions">
-            <button className="primary-button" disabled={!canSolve || running} onClick={search}>{running ? 'Searching…' : 'Find minimum changes'}</button>
+            <button className="primary-button" disabled={!canSolve || running || clearingCache} onClick={search}>{running ? 'Searching…' : 'Find minimum changes'}</button>
             <button onClick={() => { edit([...initialWords]); setEditedWords(initialWords.map(() => false)); setExcludedInput('') }}>Clear input</button>
             {running && <button onClick={() => { stop(); setNotice('Search cancelled. No conclusion was reached.') }}>Cancel</button>}
           </div>
@@ -171,6 +186,7 @@ function App() {
           </fieldset>
           <p className="limit-note">Editing words, exclusions, or limits cancels and clears the search.</p>
           <p className="limit-note" role="status">{cacheNotice}</p>
+          <button disabled={running || clearingCache} onClick={clearCache}>{clearingCache ? 'Clearing cache…' : 'Clear cache'}</button>
         </div>
       </section>
       <section className="results-panel" aria-labelledby="results-heading" aria-busy={running}>
