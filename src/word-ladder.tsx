@@ -83,13 +83,13 @@ function WordLadder() {
   return (
     <main className="page-shell ladder-page">
       <nav className="topbar" aria-label="Primary navigation">
-        <a className="brand" href={import.meta.env.BASE_URL}><span className="brand-mark">P</span><span>Pandergram <em>Solver</em></span></a>
+        <a className="brand" href={import.meta.env.BASE_URL}><img className="brand-mark" src={`${import.meta.env.BASE_URL}word-ladder-icon.svg`} width="44" height="44" alt="" /><span>Word ladder <em>solver</em></span></a>
         <div className="page-links"><a href={import.meta.env.BASE_URL}>Pandergrams</a><a href={`${import.meta.env.BASE_URL}word-ladder.html`} aria-current="page">Word ladder</a></div>
       </nav>
       <section className="workspace word-panel" aria-labelledby="ladder-heading">
         <p className="eyebrow">One step at a time</p>
         <h1 id="ladder-heading">Word ladder</h1>
-        <p className="helper">Connect two words in the fewest steps. Replacing exactly one letter is always allowed. Enable extra moves below to explore more connections. Every step must form a word in the same word list used by Pandergram Solver.</p>
+        <p className="helper">Connect two words in the fewest steps. Replacing exactly one letter is always allowed. Enable extra moves below to explore more connections. Every step must form a valid dictionary word.</p>
         <p className="dictionary-note"><a href="https://norvig.com/ngrams/word.list" target="_blank" rel="noreferrer">{dictionary.source}</a> · {lexicon ? `${lexicon.size.toLocaleString()} words loaded` : dictionaryError ? 'Unavailable' : 'Loading…'}</p>
         {dictionaryError && <p role="alert" className="field-error">{dictionaryError} <button onClick={() => setRetry(value => value + 1)}>Retry</button></p>}
         <form onSubmit={event => { event.preventDefault(); search() }}>
