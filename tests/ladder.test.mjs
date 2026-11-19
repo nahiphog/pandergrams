@@ -1,9 +1,38 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { solveLadder } from '../src/ladder.ts'
+import { explorationPaths, exploreLadder, solveLadder } from '../src/ladder.ts'
 
 const differences = (a, b) => a.length === b.length ? [...a].filter((letter, i) => letter !== b[i]).length : Infinity
+
+test('exploration retains every shortest route and excludes repeated words and longer detours', () => {
+  const dictionary = new Set(['AAA', 'AAB', 'ABA', 'ABB', 'BBB', 'ZZZ'])
+  const result = exploreLadder('AAA', dictionary, {}, 5)
+  assert.deepEqual(result.levels, [['AAB', 'ABA'], ['ABB'], ['BBB'], [], []])
+  assert.equal(result.nodes.ABB.pathCount, '2')
+  assert.deepEqual(explorationPaths(result, 'BBB'), [['AAA', 'ABA', 'ABB', 'BBB'], ['AAA', 'AAB', 'ABB', 'BBB']])
+  assert.ok(!result.nodes.ZZZ)
+  assert.deepEqual(explorationPaths(result, 'ZZZ'), [])
+  assert.deepEqual(exploreLadder('AAA', dictionary, {}, 1).levels, [['AAB', 'ABA']])
+  for (const limit of [0, 6, 1.5, NaN]) assert.throws(() => exploreLadder('AAA', dictionary, {}, limit))
+  assert.throws(() => exploreLadder('NOPE', dictionary))
+})
+
+test('all shortest paths can be paged without omission or duplication', () => {
+  const words = Array.from({ length: 32 }, (_, n) => n.toString(2).padStart(5, '0').replaceAll('0', 'A').replaceAll('1', 'B'))
+  const result = exploreLadder('AAAAA', new Set(words))
+  assert.equal(result.nodes.BBBBB.pathCount, '120')
+  const paths = []
+  for (let offset = 0n; offset < 120n; offset += 25n) paths.push(...explorationPaths(result, 'BBBBB', offset))
+  assert.equal(paths.length, 120)
+  assert.equal(new Set(paths.map(path => path.join(','))).size, 120)
+  for (const path of paths) {
+    assert.equal(path.length, 6)
+    assert.equal(new Set(path).size, 6)
+    for (let i = 1; i < path.length; i++) assert.equal(differences(path[i - 1], path[i]), 1)
+  }
+  assert.deepEqual(explorationPaths(result, 'BBBBB', 120n), [])
+})
 
 function verify(start, end, words, distance) {
   const result = solveLadder(start, end, words)
@@ -126,4 +155,46 @@ test('all rule combinations match independent shortest distances with repeated l
       }
     }
   }
+})
+
+test('exploration agrees with independent exhaustive shortest-path enumeration for every rule combination', () => {
+  const words = ['A', 'AB', 'BA', 'AA', 'AAB', 'ABA', 'BAA', 'ABB', 'BAB', 'BBA', 'ABC', 'CAB', 'BCA', 'CBA', 'ZZZ']
+  const dictionary = new Set(words)
+  for (const addDelete of [false, true]) for (const rearrange of ['off', 'swap', 'permute']) for (const move of [false, true]) {
+    const options = { addDelete, rearrange, move }
+    const start = 'AAB'
+    const result = exploreLadder(start, dictionary, options)
+    // Build all shortest paths layer by layer with explicit path arrays.
+    const expected = new Map([[start, [[start]]]])
+    let frontier = [[start]]
+    for (let depth = 1; depth <= 5; depth++) {
+      const nextFrontier = []
+      for (const path of frontier) for (const next of words) {
+        if (path.includes(next) || !permitted(path.at(-1), next, options)) continue
+        if (expected.has(next) && expected.get(next)[0].length < depth + 1) continue
+        const nextPath = [...path, next]
+        if (!expected.has(next)) expected.set(next, [])
+        expected.get(next).push(nextPath)
+        nextFrontier.push(nextPath)
+      }
+      frontier = nextFrontier
+    }
+    assert.deepEqual(new Set(Object.keys(result.nodes)), new Set(expected.keys()))
+    for (const [word, paths] of expected) {
+      assert.equal(result.nodes[word].pathCount, String(paths.length))
+      assert.deepEqual(new Set(explorationPaths(result, word, 0n, paths.length).map(path => path.join(','))), new Set(paths.map(path => path.join(','))))
+    }
+  }
+})
+
+test('BLACK exploration contains every dictionary neighbor, SLACK at one step, and SLICK at two', () => {
+  const dictionary = new Set(readFileSync(new URL('../public/norvig-word-list.txt', import.meta.url), 'utf8').split(/\r?\n/).map(word => word.trim().toUpperCase()).filter(Boolean))
+  const result = exploreLadder('BLACK', dictionary)
+  const immediate = [...dictionary].filter(word => differences('BLACK', word) === 1).sort()
+  assert.deepEqual(result.levels[0], immediate)
+  assert.ok(result.levels[0].includes('SLACK'))
+  assert.ok(result.levels[1].includes('SLICK'))
+  const second = new Set(immediate.flatMap(word => [...dictionary].filter(next => differences(word, next) === 1 && next !== 'BLACK' && !immediate.includes(next))))
+  assert.deepEqual(new Set(result.levels[1]), second)
+  assert.ok(explorationPaths(result, 'SLICK', 0n, 100).some(path => path.join(',') === 'BLACK,SLACK,SLICK'))
 })

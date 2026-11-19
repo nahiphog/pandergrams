@@ -54,6 +54,18 @@ reachable words are exhausted. Editing inputs or rules cancels and clears the
 search. Cancel stops the worker without claiming no solution exists.
 The production build includes both HTML pages for direct links on GitHub Pages.
 
+Choose **Explore all words from a starting word** to hide the ending-word field
+and find every reachable word within 1–5 steps (default: 5). All enabled move
+rules apply. Results group words by their minimum distance, with counts for each
+step. Selecting a word shows every shortest path to it. Words cannot repeat
+within a shortest path; a word may occur in several different paths. Longer
+detours to already reachable words are excluded.
+
+Exploration retains all equal-distance predecessors and exact path counts,
+without a result cap. Results use pages of 100 words and 25 paths for responsive
+display; every word and path remains accessible. Switching mode or changing the
+step limit cancels and clears the search. The original two-word mode is unchanged.
+
 ## Pandergram search behavior
 
 The solver separates the problem into independent word searches and an exact

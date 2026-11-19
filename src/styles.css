@@ -106,4 +106,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .ladder-options select { width: 100%; padding: 10px; border: 1px solid #c5cfc8; border-radius: 8px; background: #fafbf7; color: #263b4c; }
 .ladder-transition { min-width: 0; }
 .ladder-operation { font-size: 14px; color: #657384; margin: 4px 0 0; }
+.exploration-words { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.exploration-words button { overflow-wrap: anywhere; max-width: 100%; }
+.exploration-words span { font-size: 14px; }
+.exploration-results button[aria-pressed="true"] { background: #1e3144; color: white; }
+.exploration-paths { border-top: 1px solid #c5cfc8; margin-top: 24px; padding-top: 12px; }
+.exploration-path-list { padding-left: 20px; font-family: 'DM Mono', monospace; overflow-wrap: anywhere; line-height: 1.8; }
 @media (max-width: 510px) { .ladder-inputs { grid-template-columns: 1fr; gap: 12px; }.ladder-path li { gap: 10px; } }
