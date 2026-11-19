@@ -5,7 +5,7 @@ import type { Progress, Result } from './solver'
 import type { SearchRequest, SearchResponse } from './solver.worker'
 import './styles.css'
 
-const initialWords = ['QUIZZES', 'BACKYARD', 'DAMPING', 'MOUTHFUL', 'VOWELS']
+const initialWords = ['', '', '', '', '']
 const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 
 function App() {
@@ -124,7 +124,11 @@ function App() {
               </div>
             ))}
           </div>
-          <div className="edit-actions"><button onClick={() => { edit(initialWords.map(() => '')); setExcludedInput('') }}>Clear input</button></div>
+          <div className="search-actions">
+            <button className="primary-button" disabled={!canSolve || running} onClick={search}>{running ? 'Searching…' : 'Find minimum changes'}</button>
+            <button onClick={() => { edit([...initialWords]); setExcludedInput('') }}>Clear input</button>
+            {running && <button onClick={() => { stop(); setNotice('Search cancelled. No conclusion was reached.') }}>Cancel</button>}
+          </div>
           <div className="exclusions-field">
             <label htmlFor="excluded-words">Excluded words <span>(optional)</span></label>
             <input id="excluded-words" value={excludedInput} placeholder="e.g. SEXERS, VEXERS" spellCheck={false} autoComplete="off" aria-invalid={!!exclusionError} aria-describedby={`exclusions-help${exclusionError ? ' exclusions-error' : ''}`} onChange={(event) => { edit(words); setExcludedInput(event.target.value.toUpperCase()) }} />
@@ -148,7 +152,6 @@ function App() {
             <p id="limits-help" className="limit-note">Increase these limits to explore more optimal solutions. More states use more memory. Time includes collecting walkthroughs; the 10,000-walkthrough result limit still applies.</p>
             <button onClick={() => { edit(words); setStateLimitInput('250000'); setTimeLimitInput('30') }}>Restore default limits</button>
           </fieldset>
-          <div className="search-actions"><button className="primary-button" disabled={!canSolve || running} onClick={search}>{running ? 'Searching…' : 'Find minimum changes'}</button>{running && <button onClick={() => { stop(); setNotice('Search cancelled. No conclusion was reached.') }}>Cancel</button>}</div>
           <p className="limit-note">Editing words, exclusions, or limits cancels and clears the search.</p>
         </div>
         <aside className="coverage-panel" aria-labelledby="coverage-heading">

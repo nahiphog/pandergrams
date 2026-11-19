@@ -14,7 +14,8 @@ npm test
 npm run build
 ```
 
-Edit the five starting word boxes, then select **Find minimum changes**.
+The five starting word boxes are empty on load. Fill them, then select
+**Find minimum changes**, immediately to the left of **Clear input**.
 The bank always has exactly five boxes; Clear input empties them without removing any.
 Every word must appear in the bundled [Norvig dictionary](https://norvig.com/ngrams/word.list).
 Input is normalized to uppercase. Substitutions preserve word lengths; duplicate
@@ -61,7 +62,7 @@ walkthroughs. Editing limits cancels and clears an active search. Restore defaul
 limits resets both settings; Clear input preserves the selected search limits.
 Larger state limits require more browser memory. The separate 10,000-walkthrough
 collection limit still applies. A reached limit is an
-incomplete search, never a proof of impossibility. The default five-word example
+incomplete search, never a proof of impossibility. The original five-word example
 has a minimum solution of nine moves; A* finds it within the state limit.
 These limits can be adjusted through the solver options; memory still grows
 rapidly with the number of word-bank
