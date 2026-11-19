@@ -32,7 +32,21 @@ among solutions permitted by the exclusions.
 For a six-move example, enter these five words:
 `MOBILIZES PRETESTING VERTEX HALLWAY SQUEALING`.
 
-## Search behavior
+## Word ladder page
+
+Open **Word ladder** in the navigation (or `word-ladder.html`) to connect a
+starting word to an ending word using the same bundled Norvig dictionary.
+Both words must be in the list and have equal length. Each move replaces exactly
+one letter; adding, deleting, and rearranging letters are not allowed.
+
+The separate worker runs exhaustive breadth-first search and returns one shortest
+path with its change count and each changed letter highlighted. Identical words
+take zero changes; disconnected words produce a no-ladder result only after the
+reachable words are exhausted. Editing or clearing inputs cancels and clears the
+search. Cancel stops the worker without claiming no solution exists.
+The production build includes both HTML pages for direct links on GitHub Pages.
+
+## Pandergram search behavior
 
 `src/solver.ts` performs exact A* over ordered complete word banks. A binary
 min-heap prioritizes `f = g + h`, where `g` is the moves taken and `h` is the
